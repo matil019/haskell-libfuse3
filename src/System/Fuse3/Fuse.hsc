@@ -30,11 +30,12 @@ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 -}
 module System.Fuse3.Fuse where
+-- TODO rename to System.Fuse3.Internal
 
 import Control.Exception (Exception, bracket, bracket_, finally)
 import Control.Monad (unless, void)
 import Foreign (Ptr, alloca, allocaBytes, callocBytes, free, nullPtr, peek, poke, pokeByteOff, with, withArray, withMany)
-import Foreign.C (CInt(CInt), CString, Errno, peekCString, withCString)
+import Foreign.C (CInt, Errno, peekCString, withCString)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
@@ -42,8 +43,9 @@ import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
 import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
-import System.Posix.Types (Fd(Fd))
+import System.Posix.Types (Fd)
 
+import qualified System.Fuse3.Internal.C as C
 import qualified System.Posix.Signals as Signals
 
 #include <fuse.h>
@@ -51,7 +53,7 @@ import qualified System.Posix.Signals as Signals
 data FuseOperations fh = FuseOperations () -- TODO
 
 -- Allocates a fuse_args struct to hold the commandline arguments.
-withFuseArgs :: String -> [String] -> (Ptr CFuseArgs -> IO b) -> IO b
+withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
 withFuseArgs prog args f = do
   let allArgs = (prog:args)
       argc = length allArgs
@@ -62,28 +64,28 @@ withFuseArgs prog args f = do
         (#poke struct fuse_args, argc) fuseArgs argc
         (#poke struct fuse_args, argv) fuseArgs pArgv
         (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
-        f fuseArgs `finally` fuse_opt_free_args fuseArgs
+        f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
 
 withStructFuse
   :: Exception e
-  => Ptr CFuseChan
-  -> Ptr CFuseArgs
+  => Ptr C.FuseChan
+  -> Ptr C.FuseArgs
   -> FuseOperations fh
   -> (e -> IO Errno)
-  -> (Ptr CStructFuse -> IO b)
+  -> (Ptr C.StructFuse -> IO b)
   -> IO b
 withStructFuse = _notyet
 
 -- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
--- we care about. @fuse_parse_cmdline@ will modify the `CFuseArgs` struct passed in
--- to remove those arguments; the `CFuseArgs` struct containing remaining arguments
+-- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
+-- to remove those arguments; the `C.FuseArgs` struct containing remaining arguments
 -- must be passed to @fuse_mount@/@fuse_new@.
 --
 -- The multithreaded runtime will be used regardless of the threading flag!
 -- See the comment in @fuse_session_exit@ for why.
 --
 -- TODO the second part of tuple may be unused
-fuseParseCommandLine :: Ptr CFuseArgs -> IO (Maybe (Maybe String, Bool, Bool))
+fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Maybe (Maybe String, Bool, Bool))
 fuseParseCommandLine pArgs =
   alloca $ \pMountPt ->
   alloca $ \pMultiThreaded ->
@@ -91,7 +93,7 @@ fuseParseCommandLine pArgs =
     -- TODO do we need to poke here?
     poke pMultiThreaded 0
     poke pFG 0
-    retval <- fuse_parse_cmdline pArgs pMountPt pMultiThreaded pFG
+    retval <- C.fuse_parse_cmdline pArgs pMountPt pMultiThreaded pFG
     if retval == 0
       then do
         cMountPt <- peek pMountPt
@@ -150,26 +152,26 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
--- TODO do we need `CFuseBuf`?
-handleOnce :: Ptr CFuseSession -> Ptr CFuseBuf -> Ptr CFuseChan -> IO ()
+-- TODO do we need `C.FuseBuf`?
+handleOnce :: Ptr C.FuseSession -> Ptr C.FuseBuf -> Ptr C.FuseChan -> IO ()
 handleOnce session buf chan = do
-  size <- fuse_chan_bufsize chan
+  size <- C.fuse_chan_bufsize chan
   allocaBytes (fromIntegral size) $ \ptr -> do
     #{poke struct fuse_buf, mem}  buf ptr
     #{poke struct fuse_buf, size} buf size
     with chan $ \chanP -> do
-      fuse_session_receive_buf session buf chanP
-      fuse_session_process_buf session buf =<< peek chanP
+      C.fuse_session_receive_buf session buf chanP
+      C.fuse_session_process_buf session buf =<< peek chanP
 
 forAllChans
-  :: Ptr CFuseSession
-  -> (Ptr CFuseChan -> IO a -> IO a)
+  :: Ptr C.FuseSession
+  -> (Ptr C.FuseChan -> IO a -> IO a)
   -> IO a
   -> IO a
 forAllChans session fun cont = go nullPtr
   where
   go cur = do
-    new <- fuse_session_next_chan session cur
+    new <- C.fuse_session_next_chan session cur
     if new == nullPtr
       then cont
       else fun new $ go new
@@ -179,19 +181,19 @@ runInline
   :: (Fd -> IO () -> IO b)
   -> (b -> IO ())
   -> (Either String () -> IO a) -- TODO change to (IO a)
-  -> Ptr CStructFuse
+  -> Ptr C.StructFuse
   -> IO a
 runInline register unregister act pFuse = bracket
   (callocBytes #{size struct fuse_buf}) free $ \buf -> do
-    session <- fuse_get_session pFuse
+    session <- C.fuse_get_session pFuse
     let registerChan chan cont = do
-          fd <- fuse_chan_fd chan
+          fd <- C.fuse_chan_fd chan
           bracket
             (register fd (handleOnce session buf chan))
             unregister
             (const cont)
-    ret <- forAllChans session registerChan $ withSignalHandlers (fuse_session_exit session) $ act $ Right ()
-    fuse_session_exit session
+    ret <- forAllChans session registerChan $ withSignalHandlers (C.fuse_session_exit session) $ act $ Right ()
+    C.fuse_session_exit session
     pure ret
 
 -- Mounts the filesystem, forks, and then starts fuse
@@ -201,7 +203,7 @@ fuseMainReal
   -> Bool
   -> FuseOperations fh
   -> (e -> IO Errno)
-  -> Ptr CFuseArgs
+  -> Ptr C.FuseArgs
   -> String
   -> IO a
 fuseMainReal inline foreground ops handler pArgs mountPt =
@@ -211,8 +213,8 @@ fuseMainReal inline foreground ops handler pArgs mountPt =
           then (>>) (changeWorkingDirectory "/") . procMain
           else daemon . procMain
   in withCString mountPt $ \cMountPt -> bracket
-       (fuse_mount cMountPt pArgs)
-       (const $ fuse_unmount cMountPt nullPtr) $ \pFuseChan -> do
+       (C.fuse_mount cMountPt pArgs)
+       (const $ C.fuse_unmount cMountPt nullPtr) $ \pFuseChan -> do
          if pFuseChan == nullPtr
            then case inline of
              Nothing -> exitFailure
@@ -223,13 +225,13 @@ fuseMainReal inline foreground ops handler pArgs mountPt =
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
-    session <- fuse_get_session pFuse
+    session <- C.fuse_get_session pFuse
     -- calling fuse_session_exit to exit the main loop only appears to work
     -- with the multithreaded fuse loop. In the single-threaded case, FUSE
     -- depends on their recv() call to finish with EINTR when signals arrive.
     -- This doesn't happen with GHC's signal handling in place.
-    withSignalHandlers (fuse_session_exit session) $ do
-      retVal <- fuse_loop_mt pFuse
+    withSignalHandlers (C.fuse_session_exit session) $ do
+      retVal <- C.fuse_loop_mt pFuse
       if retVal == 1
         then exitWith ExitSuccess
         else exitFailure
@@ -278,60 +280,3 @@ fuseMain ops handler = do
   prog <- getProgName
   args <- getArgs
   fuseRun prog args ops handler
-
--- TODO split module
-
------------------------------------------------------------------------------
--- C land
-
----
--- exported C called from Haskell
----  
-
--- TODO check the type signatures against libfuse3
-
-data CFuseArgs -- struct fuse_args
-
-data CFuseChan -- struct fuse_chan
-
-data CFuseSession -- struct fuse_session
-
-data CStructFuse -- struct fuse
-
-data CFuseBuf
-
-foreign import ccall safe "fuse_mount"
-  fuse_mount :: CString -> Ptr CFuseArgs -> IO (Ptr CFuseChan)
-
-foreign import ccall safe "fuse_unmount"
-  fuse_unmount :: CString -> Ptr CFuseChan -> IO ()
-
-foreign import ccall unsafe "fuse_chan_bufsize"
-  fuse_chan_bufsize :: Ptr CFuseChan -> IO Word -- TODO CWord?
-
-foreign import ccall unsafe "fuse_chan_fd"
-  fuse_chan_fd :: Ptr CFuseChan -> IO Fd
-
-foreign import ccall safe "fuse_get_session"
-  fuse_get_session :: Ptr CStructFuse -> IO (Ptr CFuseSession)
-
-foreign import ccall safe "fuse_session_exit"
-  fuse_session_exit :: Ptr CFuseSession -> IO ()
-
-foreign import ccall safe "fuse_parse_cmdline"
-  fuse_parse_cmdline :: Ptr CFuseArgs -> Ptr CString -> Ptr Int -> Ptr Int -> IO Int
-
-foreign import ccall unsafe "fuse_session_next_chan"
-  fuse_session_next_chan :: Ptr CFuseSession -> Ptr CFuseChan -> IO (Ptr CFuseChan)
-
-foreign import ccall safe "fuse_opt_free_args"
-  fuse_opt_free_args :: Ptr CFuseArgs -> IO ()
-
-foreign import ccall safe "fuse_loop_mt"
-  fuse_loop_mt :: Ptr CStructFuse -> IO Int
-
-foreign import ccall unsafe "fuse_session_receive_buf"
-  fuse_session_receive_buf :: Ptr CFuseSession -> Ptr CFuseBuf -> Ptr (Ptr CFuseChan) -> IO ()
-
-foreign import ccall safe "fuse_session_receive_buf"
-  fuse_session_process_buf :: Ptr CFuseSession -> Ptr CFuseBuf -> Ptr CFuseChan -> IO ()
