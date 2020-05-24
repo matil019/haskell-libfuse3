@@ -68,9 +68,7 @@ withFuseArgs prog args f = do
 
 withStructFuse
   :: Exception e
-  => Ptr C.FuseChan
-  -> Ptr C.FuseArgs
-  -> FuseOperations fh
+  => FuseOperations fh
   -> (e -> IO Errno)
   -> (Ptr C.StructFuse -> IO b)
   -> IO b
@@ -203,25 +201,19 @@ fuseMainReal
   -> Bool
   -> FuseOperations fh
   -> (e -> IO Errno)
-  -> Ptr C.FuseArgs
+  -> Ptr C.StructFuse
   -> String
   -> IO a
-fuseMainReal inline foreground ops handler pArgs mountPt =
+fuseMainReal inline foreground ops handler fu mountPt =
   let strategy = case inline of
         Just (register, unregister, act) -> runInline register unregister act
         Nothing -> if foreground
           then (>>) (changeWorkingDirectory "/") . procMain
           else daemon . procMain
-  in withCString mountPt $ \cMountPt -> bracket
-       (C.fuse_mount cMountPt pArgs)
-       (const $ C.fuse_unmount cMountPt nullPtr) $ \pFuseChan -> do
-         if pFuseChan == nullPtr
-           then case inline of
-             Nothing -> exitFailure
-             -- TODO: Add some way to notify the called application
-             -- whether fuse is up, or not
-             Just (_, _, act) -> act $ Left "Failed to create fuse handle"
-           else withStructFuse pFuseChan pArgs ops handler strategy
+  in withCString mountPt $ \cMountPt -> do
+       -- TODO handle failure! (return value /= 0) throw? return Left?
+       _ <- C.fuse_mount fu cMountPt
+       withStructFuse ops handler strategy `finally` C.fuse_unmount fu
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
@@ -244,7 +236,14 @@ fuseRun prog args ops handler =
           case cmd of
             Nothing -> fail ""
             Just (Nothing, _, _) -> fail "Usage error: mount point required"
-            Just (Just mountPt, _, foreground) -> fuseMainReal Nothing foreground ops handler pArgs mountPt)
+            Just (Just mountPt, _, foreground) -> do
+              let pOps = _ :: Ptr C.FuseOperations
+                  opsSize = _
+                  privData = _
+              pFuse <- C.fuse_new pArgs pOps opsSize privData
+              -- TODO fuse_new returns nullPtr on failure
+              -- but it's unlikely because fuseParseCommandLine already succeeded at this point
+              fuseMainReal Nothing foreground ops handler pFuse mountPt)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.

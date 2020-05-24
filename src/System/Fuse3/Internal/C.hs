@@ -4,7 +4,7 @@
 module System.Fuse3.Internal.C where
 
 import Foreign (Ptr)
-import Foreign.C (CInt(CInt), CString)
+import Foreign.C (CInt(CInt), CSize(CSize), CString)
 import System.Posix.Types (Fd(Fd))
 
 -- TODO check peek/poke on structs
@@ -12,6 +12,8 @@ import System.Posix.Types (Fd(Fd))
 data FuseArgs -- struct fuse_args
 
 data FuseBuf -- struct fuse_buf
+
+data FuseOperations -- struct fuse_operations
 
 data FuseSession -- struct fuse_session
 
@@ -21,12 +23,10 @@ data FuseChan -- struct fuse_chan
   -- TODO remove. this struct is not a part of the public API
 
 foreign import ccall safe "fuse_mount"
-  fuse_mount :: CString -> Ptr FuseArgs -> IO (Ptr FuseChan)
-  -- TODO fuse_mount :: Ptr StructFuse -> CString -> IO CInt
+  fuse_mount :: Ptr StructFuse -> CString -> IO CInt
 
 foreign import ccall safe "fuse_unmount"
-  fuse_unmount :: CString -> Ptr FuseChan -> IO ()
-  -- TODO fuse_unmount :: Ptr StructFuse -> IO ()
+  fuse_unmount :: Ptr StructFuse -> IO ()
 
 foreign import ccall unsafe "fuse_chan_bufsize"
   fuse_chan_bufsize :: Ptr FuseChan -> IO Word -- TODO CWord?
@@ -49,6 +49,12 @@ foreign import ccall safe "fuse_parse_cmdline"
 foreign import ccall unsafe "fuse_session_next_chan"
   fuse_session_next_chan :: Ptr FuseSession -> Ptr FuseChan -> IO (Ptr FuseChan)
   -- TODO remove. this function does not exist
+
+foreign import ccall safe "fuse_new"
+  fuse_new :: Ptr FuseArgs -> Ptr FuseOperations -> CSize -> Ptr a -> IO (Ptr StructFuse)
+
+foreign import ccall safe "fuse_destroy"
+  fuse_destroy :: Ptr StructFuse -> IO ()
 
 foreign import ccall safe "fuse_opt_free_args"
   fuse_opt_free_args :: Ptr FuseArgs -> IO ()
