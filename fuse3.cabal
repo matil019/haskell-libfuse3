@@ -17,6 +17,7 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
 library
+  -- TODO organize module structure
   exposed-modules:     Args
                        FileStat
                        System.Fuse3.Fuse

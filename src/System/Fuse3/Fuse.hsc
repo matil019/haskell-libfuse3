@@ -66,13 +66,14 @@ withFuseArgs prog args f = do
         (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
         f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
 
-withStructFuse
+-- memo: a replacement of withStructFuse
+withCFuseOperations
   :: Exception e
   => FuseOperations fh
   -> (e -> IO Errno)
-  -> (Ptr C.StructFuse -> IO b)
+  -> (Ptr C.FuseOperations -> IO b)
   -> IO b
-withStructFuse = _notyet
+withCFuseOperations = _next
 
 -- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
@@ -196,15 +197,12 @@ runInline register unregister act pFuse = bracket
 
 -- Mounts the filesystem, forks, and then starts fuse
 fuseMainReal
-  :: Exception e
-  => Maybe (Fd -> IO () -> IO b, b -> IO (), Either String () -> IO a)
+  :: Maybe (Fd -> IO () -> IO b, b -> IO (), Either String () -> IO a)
   -> Bool
-  -> FuseOperations fh
-  -> (e -> IO Errno)
   -> Ptr C.StructFuse
   -> String
   -> IO a
-fuseMainReal inline foreground ops handler fu mountPt =
+fuseMainReal = \inline foreground pFuse mountPt ->
   let strategy = case inline of
         Just (register, unregister, act) -> runInline register unregister act
         Nothing -> if foreground
@@ -212,8 +210,8 @@ fuseMainReal inline foreground ops handler fu mountPt =
           else daemon . procMain
   in withCString mountPt $ \cMountPt -> do
        -- TODO handle failure! (return value /= 0) throw? return Left?
-       _ <- C.fuse_mount fu cMountPt
-       withStructFuse ops handler strategy `finally` C.fuse_unmount fu
+       _ <- C.fuse_mount pFuse cMountPt
+       strategy pFuse `finally` C.fuse_unmount pFuse
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
@@ -236,14 +234,15 @@ fuseRun prog args ops handler =
           case cmd of
             Nothing -> fail ""
             Just (Nothing, _, _) -> fail "Usage error: mount point required"
-            Just (Just mountPt, _, foreground) -> do
-              let pOps = _ :: Ptr C.FuseOperations
-                  opsSize = _
-                  privData = _
-              pFuse <- C.fuse_new pArgs pOps opsSize privData
-              -- TODO fuse_new returns nullPtr on failure
-              -- but it's unlikely because fuseParseCommandLine already succeeded at this point
-              fuseMainReal Nothing foreground ops handler pFuse mountPt)
+            Just (Just mountPt, _, foreground) ->
+              withCFuseOperations ops handler $ \pOp -> do
+                let opSize = (#size struct fuse_operations)
+                    privData = _later
+                -- TODO fuse_new returns nullPtr on failure
+                -- but it's unlikely because fuseParseCommandLine already succeeded at this point
+                -- TODO dispose pFuse? (@fuse_destroy@)
+                pFuse <- C.fuse_new pArgs pOp opSize privData
+                fuseMainReal Nothing foreground pFuse mountPt)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
