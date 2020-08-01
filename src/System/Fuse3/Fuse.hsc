@@ -32,11 +32,11 @@ SUCH DAMAGE.
 module System.Fuse3.Fuse where
 -- TODO rename to System.Fuse3.Internal
 
-import Control.Exception (Exception, bracket, bracket_, finally)
+import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad (unless, void)
 import FileStat (FileStat)
-import Foreign (Ptr, alloca, allocaBytes, callocBytes, free, nullPtr, peek, poke, pokeByteOff, with, withArray, withMany)
-import Foreign.C (CInt, Errno, peekCString, withCString)
+import Foreign (FunPtr, Ptr, alloca, allocaBytes, callocBytes, free, nullPtr, peek, poke, pokeByteOff, with, withArray, withMany)
+import Foreign.C (CInt, Errno(Errno), peekCString, withCString)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
@@ -67,6 +67,7 @@ data FileSystemStats
 
 -- TODO change the types of each field to @Maybe (foo -> bar -> IO baz)@
 -- TODO add low-level FuseOperations whose members are @FunPtr foo@
+-- memo: when adding a new field, make sure to update withCFuseOperations
 data FuseOperations fh = FuseOperations
   -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
   { fuseGetFileStat :: FilePath -> IO (Either Errno FileStat)
@@ -244,8 +245,64 @@ withCFuseOperations
   -> (Ptr C.FuseOperations -> IO b)
   -> IO b
 withCFuseOperations ops handler cont =
-  bracket (callocBytes (#size struct fuse_operations)) free $ \pOp -> do
-    _
+  bracket (callocBytes (#size struct fuse_operations)) free $ \pOps -> do
+    -- TODO freeHaskellFunPtr to *every* mk functions
+    mkGetattr    wrapGetattr    >>= (#poke struct fuse_operations, getattr)    pOps
+    mkReadlink   wrapReadlink   >>= (#poke struct fuse_operations, readlink)   pOps
+    mkMknod      wrapMknod      >>= (#poke struct fuse_operations, mknod)      pOps
+    mkMkdir      wrapMkdir      >>= (#poke struct fuse_operations, mkdir)      pOps
+    mkUnlink     wrapUnlink     >>= (#poke struct fuse_operations, unlink)     pOps
+    mkRmdir      wrapRmdir      >>= (#poke struct fuse_operations, rmdir)      pOps
+    mkSymlink    wrapSymlink    >>= (#poke struct fuse_operations, symlink)    pOps
+    mkRename     wrapRename     >>= (#poke struct fuse_operations, rename)     pOps
+    mkLink       wrapLink       >>= (#poke struct fuse_operations, link)       pOps
+    mkChmod      wrapChmod      >>= (#poke struct fuse_operations, chmod)      pOps
+    mkChown      wrapChown      >>= (#poke struct fuse_operations, chown)      pOps
+    mkTruncate   wrapTruncate   >>= (#poke struct fuse_operations, truncate)   pOps
+    mkOpen       wrapOpen       >>= (#poke struct fuse_operations, open)       pOps
+    mkRead       wrapRead       >>= (#poke struct fuse_operations, read)       pOps
+    mkWrite      wrapWrite      >>= (#poke struct fuse_operations, write)      pOps
+    mkStatfs     wrapStatfs     >>= (#poke struct fuse_operations, statfs)     pOps
+    mkFlush      wrapFlush      >>= (#poke struct fuse_operations, flush)      pOps
+    mkRelease    wrapRelease    >>= (#poke struct fuse_operations, release)    pOps
+    mkFsync      wrapFsync      >>= (#poke struct fuse_operations, fsync)      pOps
+    mkOpendir    wrapOpendir    >>= (#poke struct fuse_operations, opendir)    pOps
+    mkReaddir    wrapReaddir    >>= (#poke struct fuse_operations, readdir)    pOps
+    mkReleasedir wrapReleasedir >>= (#poke struct fuse_operations, releasedir) pOps
+    mkFsyncdir   wrapFsyncdir   >>= (#poke struct fuse_operations, fsyncdir)   pOps
+    mkInit       wrapInit       >>= (#poke struct fuse_operations, init)       pOps
+    mkDestroy    wrapDestroy    >>= (#poke struct fuse_operations, destroy)    pOps
+    mkAccess     wrapAccess     >>= (#poke struct fuse_operations, access)     pOps
+    cont pOps
+  where
+  handleAsFuseError :: IO Errno -> IO CInt
+  handleAsFuseError = fmap (negate . unErrno) . handle handler
+  wrapGetattr = undefined
+  wrapReadlink = undefined
+  wrapMknod = undefined
+  wrapMkdir = undefined
+  wrapUnlink = undefined
+  wrapRmdir = undefined
+  wrapSymlink = undefined
+  wrapRename = undefined
+  wrapLink = undefined
+  wrapChmod = undefined
+  wrapChown = undefined
+  wrapTruncate = undefined
+  wrapOpen = undefined
+  wrapRead = undefined
+  wrapWrite = undefined
+  wrapStatfs = undefined
+  wrapFlush = undefined
+  wrapRelease = undefined
+  wrapFsync = undefined
+  wrapOpendir = undefined
+  wrapReaddir = undefined
+  wrapReleasedir = undefined
+  wrapFsyncdir = undefined
+  wrapInit = undefined
+  wrapDestroy = undefined
+  wrapAccess = undefined
 
 -- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
@@ -450,3 +507,113 @@ fuseMain ops handler = do
   prog <- getProgName
   args <- getArgs
   fuseRun prog args ops handler
+
+-- TODO move to another module
+unErrno :: Errno -> CInt
+unErrno (Errno errno) = errno
+
+-- TODO move to another module
+-- TODO @Char -> IO ()@ are placeholders
+type CGetattr = Char -> IO ()
+foreign import ccall "wrapper"
+  mkGetattr :: CGetattr -> IO (FunPtr CGetattr)
+
+type CReadlink = Char -> IO ()
+foreign import ccall "wrapper"
+  mkReadlink :: CReadlink -> IO (FunPtr CReadlink)
+
+type CMknod = Char -> IO ()
+foreign import ccall "wrapper"
+  mkMknod :: CMknod -> IO (FunPtr CMknod)
+
+type CMkdir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkMkdir :: CMkdir -> IO (FunPtr CMkdir)
+
+type CUnlink = Char -> IO ()
+foreign import ccall "wrapper"
+  mkUnlink :: CUnlink -> IO (FunPtr CUnlink)
+
+type CRmdir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkRmdir :: CRmdir -> IO (FunPtr CRmdir)
+
+type CSymlink = Char -> IO ()
+foreign import ccall "wrapper"
+  mkSymlink :: CSymlink -> IO (FunPtr CSymlink)
+
+type CRename = Char -> IO ()
+foreign import ccall "wrapper"
+  mkRename :: CRename -> IO (FunPtr CRename)
+
+type CLink = Char -> IO ()
+foreign import ccall "wrapper"
+  mkLink :: CLink -> IO (FunPtr CLink)
+
+type CChmod = Char -> IO ()
+foreign import ccall "wrapper"
+  mkChmod :: CChmod -> IO (FunPtr CChmod)
+
+type CChown = Char -> IO ()
+foreign import ccall "wrapper"
+  mkChown :: CChown -> IO (FunPtr CChown)
+
+type CTruncate = Char -> IO ()
+foreign import ccall "wrapper"
+  mkTruncate :: CTruncate -> IO (FunPtr CTruncate)
+
+type COpen = Char -> IO ()
+foreign import ccall "wrapper"
+  mkOpen :: COpen -> IO (FunPtr COpen)
+
+type CRead = Char -> IO ()
+foreign import ccall "wrapper"
+  mkRead :: CRead -> IO (FunPtr CRead)
+
+type CWrite = Char -> IO ()
+foreign import ccall "wrapper"
+  mkWrite :: CWrite -> IO (FunPtr CWrite)
+
+type CStatfs = Char -> IO ()
+foreign import ccall "wrapper"
+  mkStatfs :: CStatfs -> IO (FunPtr CStatfs)
+
+type CFlush = Char -> IO ()
+foreign import ccall "wrapper"
+  mkFlush :: CFlush -> IO (FunPtr CFlush)
+
+type CRelease = Char -> IO ()
+foreign import ccall "wrapper"
+  mkRelease :: CRelease -> IO (FunPtr CRelease)
+
+type CFsync = Char -> IO ()
+foreign import ccall "wrapper"
+  mkFsync :: CFsync -> IO (FunPtr CFsync)
+
+type COpendir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkOpendir :: COpendir -> IO (FunPtr COpendir)
+
+type CReaddir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkReaddir :: CReaddir -> IO (FunPtr CReaddir)
+
+type CReleasedir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkReleasedir :: CReleasedir -> IO (FunPtr CReleasedir)
+
+type CFsyncdir = Char -> IO ()
+foreign import ccall "wrapper"
+  mkFsyncdir :: CFsyncdir -> IO (FunPtr CFsyncdir)
+
+type CInit = Char -> IO ()
+foreign import ccall "wrapper"
+  mkInit :: CInit -> IO (FunPtr CInit)
+
+type CDestroy = Char -> IO ()
+foreign import ccall "wrapper"
+  mkDestroy :: CDestroy -> IO (FunPtr CDestroy)
+
+type CAccess = Char -> IO ()
+foreign import ccall "wrapper"
+  mkAccess :: CAccess -> IO (FunPtr CAccess)
