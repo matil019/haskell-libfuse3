@@ -34,6 +34,7 @@ module System.Fuse3.Fuse where
 
 import Control.Exception (Exception, bracket, bracket_, finally)
 import Control.Monad (unless, void)
+import FileStat (FileStat)
 import Foreign (Ptr, alloca, allocaBytes, callocBytes, free, nullPtr, peek, poke, pokeByteOff, with, withArray, withMany)
 import Foreign.C (CInt, Errno, peekCString, withCString)
 import GHC.IO.Handle (hDuplicateTo)
@@ -42,15 +43,184 @@ import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
 import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
+import System.Posix.IO (OpenFileFlags, OpenMode)
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
-import System.Posix.Types (Fd)
+import System.Posix.Types (ByteCount, DeviceID, Fd, FileMode, FileOffset, GroupID, UserID)
 
+import qualified Data.ByteString as B
 import qualified System.Fuse3.Internal.C as C
 import qualified System.Posix.Signals as Signals
 
 #include <fuse.h>
 
-data FuseOperations fh = FuseOperations () -- TODO
+-- TODO
+data RenameFlags
+
+-- TODO
+data EntryType
+
+-- TODO
+data SyncType
+
+-- TODO
+data FileSystemStats
+
+-- TODO change the types of each field to @Maybe (foo -> bar -> IO baz)@
+-- TODO add low-level FuseOperations whose members are @FunPtr foo@
+data FuseOperations fh = FuseOperations
+  -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
+  { fuseGetFileStat :: FilePath -> IO (Either Errno FileStat)
+
+  -- | Implements 'System.Posix.Files.readSymbolicLink' operation (POSIX @readlink(2)@).
+  --
+  -- The returned 'FilePath' might be truncated depending on caller buffer size.
+  , fuseReadSymbolicLink :: FilePath -> IO (Either Errno FilePath)
+
+  -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
+  --
+  -- This function will also be called for regular file creation if 'fuseCreate' (TODO
+  -- name pending) is not defined.
+  , fuseCreateDevice :: FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno
+
+  -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
+  , fuseCreateDirectory :: FilePath -> FileMode -> IO Errno
+
+  -- | Implements 'System.Posix.Files.removeLink' (POSIX @unlink(2)@).
+  , fuseRemoveLink :: FilePath -> IO Errno
+
+  -- | Implements 'Ststen.Posix.Directory.removeDirectory' (POSIX @rmdir(2)@).
+  , fuseRemoveDirectory :: FilePath -> IO Errno
+
+  -- | Implements 'System.Posix.Files.createSymbolicLink' (POSIX @symlink(2)@).
+  , fuseCreateSymbolicLink :: FilePath -> FilePath -> IO Errno
+
+  -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@). TODO describe the flags
+  , fuseRename :: FilePath -> FilePath -> RenameFlags -> IO Errno
+
+  -- | Implements 'System.Posix.Files.createLink' (POSIX @link(2)@).
+  , fuseCreateLink :: FilePath -> FilePath -> IO Errno
+
+  -- | Implements 'System.Posix.Files.setFileMode' (POSIX @chmod(2)@).
+  --
+  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+  -- @Nothing@ even if it is open.
+  , fuseSetFileMode :: FilePath -> Maybe fh -> FileMode -> IO Errno
+
+  -- | Implements 'System.Posix.Files.setOwnerAndGroup' (POSIX @chown(2)@).
+  --
+  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+  -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
+  -- bits.
+  --
+  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+  , fuseSetOwnerAndGroup :: FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno
+
+  -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
+  --
+  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+  -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
+  -- bits.
+  --
+  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+  , fuseSetFileSize :: FilePath -> Maybe fh -> FileOffset -> IO Errno
+
+  -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@).  On success, returns
+  -- 'Right' of a filehandle-like value that will be passed to future file operations; on
+  -- failure, returns 'Left' of the appropriate 'Errno'.
+  --
+  --   * Creation flags will be filtered out / handled by the kernel.
+  --   * Access modes should be used by this to check if the operation is permitted.
+  --   * TODO if "writeback caching" is relevant, describe their caveats
+  --     http://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
+  --
+  -- TODO expose FuseFileInfo to allow setting direct_io and keep_cache?
+  -- TODO what about fuse_conn_info.capable stuff?
+  , fuseOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
+
+  -- | Implements Unix98 @pread(2)@.
+  --
+  -- It differs from 'System.Posix.Files.fdRead' by the explicit 'FileOffset' argument.
+  , fuseRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+
+  -- | Implements Unix98 @pwrite(2)@.
+  --
+  -- It differs from 'System.Posix.Files.fdWrite' by the explicit 'FileOffset' argument.
+  --
+  -- This method is expected to reset the setuid and setgid bits.
+  --
+  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+  , fuseWrite :: FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno ByteCount)
+
+  -- | Implements @statfs(2)@. TODO describe ignored fields
+  , fuseGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
+
+  -- | Called when @close(2)@ has been called on an open file.
+  --
+  -- Note: this does not mean that the file is released.  This function may be called more
+  -- than once for each @open(2)@.  The return value is passed on to the @close(2)@ system
+  -- call.
+  , fuseFlush :: FilePath -> fh -> IO Errno
+
+  -- | Called when an open file has all file descriptors closed and all memory mappings
+  -- unmapped.
+  --
+  -- For every @open@ call there will be exactly one @release@ call with the same flags.
+  -- It is possible to have a file opened more than once, in which case only the last
+  -- release will mean that no more reads or writes will happen on the file.
+  , fuseRelease :: FilePath -> fh -> IO ()
+
+  -- | Implements @fsync(2)@.
+  , fuseSynchronizeFile :: FilePath -> fh -> SyncType -> IO Errno
+
+  -- TODO , setxattr :: _
+  -- TODO , getxattr :: _
+  -- TODO , listxattr :: _
+  -- TODO , removexattr :: _
+
+  -- | Implements @opendir(3)@.
+  --
+  -- This method should check if the open operation is permitted for this directory.
+  , fuseOpenDirectory :: FilePath -> IO (Either Errno fh)
+
+  -- | Implements @readdir(3)@.
+  --
+  -- The entire contents of the directory should be returned as a list of tuples
+  -- (corresponding to the first mode of operation documented in @fuse.h@).
+  , fuseReadDirectory :: FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])
+
+  -- | Implements @closedir(3)@.
+  , fuseReleaseDirectory :: FilePath -> fh -> IO Errno
+
+  -- | Synchronize the directory's contents; analogous to 'fuseSynchronizeFile'.
+  , fuseSynchronizeDirectory :: FilePath -> fh -> SyncType -> IO Errno
+
+  -- | Initializes the filesystem.  This is called before all other operations.
+  , fuseInit :: IO ()
+
+  -- | Called on filesystem exit to allow cleanup.
+  , fuseDestroy :: IO ()
+
+  -- | Check file access permissions; this will be called for the @access()@ system call.
+  --
+  -- If the @default_permissions@ mount option is given, this method is not called. This
+  -- method is also not called under Linux kernel versions 2.4.x
+  --
+  -- TODO add notes about @default_permissions@ to other relevant handlers
+  , fuseAccess :: FilePath -> Int -> IO Errno  -- TODO what is this Int?
+
+  -- TODO , create :: _
+  -- TODO , lock :: _
+  -- TODO , utimens :: _
+  -- TODO , bmap :: _
+  -- TODO , ioctl :: _
+  -- TODO , poll :: _
+  -- TODO , write_buf :: _
+  -- TODO , read_buf :: _
+  -- TODO , flock :: _
+  -- TODO , fallocate :: _
+  -- TODO , copy_file_range :: _
+  -- TODO , lseek :: _
+  }
 
 -- Allocates a fuse_args struct to hold the commandline arguments.
 withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
@@ -73,7 +243,9 @@ withCFuseOperations
   -> (e -> IO Errno)
   -> (Ptr C.FuseOperations -> IO b)
   -> IO b
-withCFuseOperations = _next
+withCFuseOperations ops handler cont =
+  bracket (callocBytes (#size struct fuse_operations)) free $ \pOp -> do
+    _
 
 -- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
