@@ -144,7 +144,7 @@ fileModeToEntryType mode
   where
   fileType = mode .&. (#const S_IFMT)
 
--- | Used by 'fuseSynchronizeFile' and 'fuseSynchronizeDirectory'.
+-- | Passed to 'fuseSynchronizeFile' and 'fuseSynchronizeDirectory'.
 data SyncType
   -- | Synchronize all in-core parts of a file to disk: file content and metadata.
   = FullSync
@@ -152,12 +152,13 @@ data SyncType
   | DataSync
   deriving (Eq, Show)
 
--- TODO the @mode@ parameter for @access(2)@
--- F_OK or (R_OK | W_OK | X_OK)
-data AccessMode
-
-toAccessMode :: CInt -> AccessMode
-toAccessMode = _
+-- | The query type of @access@. Passed to `fuseAccess`.
+--
+--   [@FileOK@] File existence (@F_OK@)
+--
+--   [@PermOK@] Reading, writing and executing permissions (@R_OK@, @W_OK@ and @X_OK@, resp.)
+data AccessMode = FileOK | PermOK Bool Bool Bool
+  deriving (Eq, Show)
 
 -- TODO move to another module?
 testBitSet :: Bits a => a -> a -> Bool
@@ -305,7 +306,7 @@ data FuseOperations fh = FuseOperations
   -- | Implements 'System.Posix.Files.fileAccess' and 'System.Posix.Files.fileExist
   -- (POSIX @access(2)@).
   --
-  -- Checks file access permissions; this will be called for the @access()@ system call.
+  -- Checks file access permissions as requested by an `AccessMode`.
   --
   -- If the @default_permissions@ mount option is given, this method is not called. This
   -- method is also not called under Linux kernel versions 2.4.x
@@ -588,7 +589,14 @@ withCFuseOperations ops handler cont =
   wrapAccess :: CAccess
   wrapAccess pFilePath mode = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseAccess ops) filePath (toAccessMode mode)
+    (fuseAccess ops) filePath accessMode
+    where
+    accessMode
+      | testBitSet mode (#const F_OK) = FileOK
+      | otherwise = PermOK
+          (testBitSet mode (#const R_OK))
+          (testBitSet mode (#const W_OK))
+          (testBitSet mode (#const X_OK))
 
 -- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
