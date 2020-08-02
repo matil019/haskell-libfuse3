@@ -3,9 +3,10 @@
 -- Exported C called from Haskell
 module System.Fuse3.Internal.C where
 
+import FileStat (FileStat)
 import Foreign (Ptr)
 import Foreign.C (CInt(CInt), CSize(CSize), CString)
-import System.Posix.Types (Fd(Fd))
+import System.Posix.Types (COff, Fd(Fd))
 
 -- TODO check peek/poke on structs
 
@@ -13,9 +14,26 @@ data FuseArgs -- struct fuse_args
 
 data FuseBuf -- struct fuse_buf
 
+data FuseConfig -- struct fuse_config
+
+data FuseConnInfo -- struct fuse_conn_info
+
+data FuseFileInfo -- struct fuse_file_info
+
+-- typedef fuse_fill_dir_t
+type FuseFillDir = Ptr FuseFillDirBuf -> CString -> Ptr FileStat -> COff -> FuseFillDirFlags -> IO CInt
+
+data FuseFillDirBuf -- void
+
+type FuseFillDirFlags = CInt -- enum fuse_fill_dir_flags -- TODO give proper type??
+
 data FuseOperations -- struct fuse_operations
 
+type FuseReaddirFlags = CInt -- enum fuse_readdir_flags -- TODO give proper type??
+
 data FuseSession -- struct fuse_session
+
+data StatVFS -- struct statvfs
 
 data StructFuse -- struct fuse
 
