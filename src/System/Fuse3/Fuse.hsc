@@ -143,12 +143,6 @@ fileModeToEntryType mode
   where
   fileType = mode .&. (#const S_IFMT)
 
--- TODO remove this, this needs #define _GNU_SOURCE (i.e. linux specific)
-data RenameFlags
-
-cuintToRenameFlags :: CUInt -> RenameFlags
-cuintToRenameFlags = _
-
 -- TODO
 data SyncType
 
@@ -205,8 +199,8 @@ data FuseOperations fh = FuseOperations
   -- | Implements 'System.Posix.Files.createSymbolicLink' (POSIX @symlink(2)@).
   , fuseCreateSymbolicLink :: FilePath -> FilePath -> IO Errno
 
-  -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@). TODO describe the flags
-  , fuseRename :: FilePath -> FilePath -> RenameFlags -> IO Errno
+  -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@).
+  , fuseRename :: FilePath -> FilePath -> IO Errno
 
   -- | Implements 'System.Posix.Files.createLink' (POSIX @link(2)@).
   , fuseCreateLink :: FilePath -> FilePath -> IO Errno
@@ -444,10 +438,11 @@ withCFuseOperations ops handler cont =
     (fuseCreateSymbolicLink ops) source destination
 
   wrapRename :: CRename
-  wrapRename pOld pNew flags = handleAsFuseError $ do
+  wrapRename pOld pNew _flags = handleAsFuseError $ do
+    -- we ignore the rename flags because #define _GNU_SOURCE is needed to use the constants
     old <- peekCString pOld
     new <- peekCString pNew
-    (fuseRename ops) old new (cuintToRenameFlags flags)
+    (fuseRename ops) old new
 
   wrapLink :: CLink
   wrapLink pSource pDestination = handleAsFuseError $ do
