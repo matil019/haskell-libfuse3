@@ -40,6 +40,7 @@ import Control.Monad (unless, void)
 import Data.Bits ((.&.), Bits)
 import Data.Foldable (traverse_)
 import FileStat (FileStat)
+import FileSystemStats (FileSystemStats)
 import Foreign
   ( FunPtr
   , Ptr
@@ -150,12 +151,6 @@ data SyncType
   -- | Synchronize only the file content.
   | DataSync
   deriving (Eq, Show)
-
--- TODO
-data FileSystemStats
-
-pokeFileSystemStats :: Ptr C.StatVFS -> FileSystemStats -> IO ()
-pokeFileSystemStats = _
 
 -- TODO the @mode@ parameter for @access(2)@
 -- F_OK or (R_OK | W_OK | X_OK)
@@ -514,8 +509,8 @@ withCFuseOperations ops handler cont =
     str <- peekCString pStr
     (fuseGetFileSystemStats ops) str >>= \case
       Left errno -> pure errno
-      Right stat -> do
-        pokeFileSystemStats pStatVFS stat
+      Right statvfs -> do
+        poke pStatVFS statvfs
         pure eOK
 
   wrapFlush :: CFlush
@@ -898,7 +893,7 @@ type CWrite = CString -> CString -> CSize -> COff -> Ptr C.FuseFileInfo -> IO CI
 foreign import ccall "wrapper"
   mkWrite :: CWrite -> IO (FunPtr CWrite)
 
-type CStatfs = CString -> Ptr C.StatVFS -> IO CInt
+type CStatfs = CString -> Ptr FileSystemStats -> IO CInt
 foreign import ccall "wrapper"
   mkStatfs :: CStatfs -> IO (FunPtr CStatfs)
 

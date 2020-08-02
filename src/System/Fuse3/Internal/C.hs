@@ -33,8 +33,6 @@ type FuseReaddirFlags = CInt -- enum fuse_readdir_flags -- TODO give proper type
 
 data FuseSession -- struct fuse_session
 
-data StatVFS -- struct statvfs
-
 data StructFuse -- struct fuse
 
 data FuseChan -- struct fuse_chan
