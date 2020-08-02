@@ -143,11 +143,13 @@ fileModeToEntryType mode
   where
   fileType = mode .&. (#const S_IFMT)
 
--- TODO
+-- | Used by 'fuseSynchronizeFile' and 'fuseSynchronizeDirectory'.
 data SyncType
-
-toSyncType :: CInt -> SyncType
-toSyncType = _
+  -- | Synchronize all in-core parts of a file to disk: file content and metadata.
+  = FullSync
+  -- | Synchronize only the file content.
+  | DataSync
+  deriving (Eq, Show)
 
 -- TODO
 data FileSystemStats
@@ -535,7 +537,7 @@ withCFuseOperations ops handler cont =
   wrapFsync pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseSynchronizeFile ops) filePath fh (toSyncType isDataSync)
+    (fuseSynchronizeFile ops) filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapOpendir :: COpendir
   wrapOpendir pFilePath pFuseFileInfo = handleAsFuseError $ do
@@ -575,7 +577,7 @@ withCFuseOperations ops handler cont =
   wrapFsyncdir pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseSynchronizeDirectory ops) filePath fh (toSyncType isDataSync)
+    (fuseSynchronizeDirectory ops) filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapInit :: CInit
   -- TODO HFuse used `defaultExceptionHandler` instead of handler
