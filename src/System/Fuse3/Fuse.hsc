@@ -37,7 +37,7 @@ module System.Fuse3.Fuse where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad (unless, void)
-import Data.Bits ((.&.))
+import Data.Bits ((.&.), Bits)
 import Data.Foldable (traverse_)
 import FileStat (FileStat)
 import Foreign
@@ -83,13 +83,67 @@ import qualified System.Posix.Signals as Signals
 
 #include <fuse.h>
 
--- TODO
+-- | The Unix type of a node in the filesystem.
 data EntryType
+  = Unknown            -- ^ Unknown entry type
+  | NamedPipe
+  | CharacterSpecial
+  | Directory
+  | BlockSpecial
+  | RegularFile
+  | SymbolicLink
+  | Socket
+  deriving (Eq, Show)
+
+fileTypeModes :: FileMode
+fileTypeModes = (#const S_IFMT)
+
+blockSpecialMode :: FileMode
+blockSpecialMode = (#const S_IFBLK)
+
+characterSpecialMode :: FileMode
+characterSpecialMode = (#const S_IFCHR)
+
+namedPipeMode :: FileMode
+namedPipeMode = (#const S_IFIFO)
+
+regularFileMode :: FileMode
+regularFileMode = (#const S_IFREG)
+
+directoryMode :: FileMode
+directoryMode = (#const S_IFDIR)
+
+symbolicLinkMode :: FileMode
+symbolicLinkMode = (#const S_IFLNK)
+
+socketMode :: FileMode
+socketMode = (#const S_IFSOCK)
+
+-- | Converts an 'EntryType' into the corresponding POSIX 'FileMode'.
+entryTypeToFileMode :: EntryType -> FileMode
+entryTypeToFileMode Unknown          = 0
+entryTypeToFileMode NamedPipe        = namedPipeMode
+entryTypeToFileMode CharacterSpecial = characterSpecialMode
+entryTypeToFileMode Directory        = directoryMode
+entryTypeToFileMode BlockSpecial     = blockSpecialMode
+entryTypeToFileMode RegularFile      = regularFileMode
+entryTypeToFileMode SymbolicLink     = symbolicLinkMode
+entryTypeToFileMode Socket           = socketMode
 
 fileModeToEntryType :: FileMode -> EntryType
-fileModeToEntryType = _
+fileModeToEntryType mode
+  | fileType == namedPipeMode        = NamedPipe
+  | fileType == characterSpecialMode = CharacterSpecial
+  | fileType == directoryMode        = Directory
+  | fileType == blockSpecialMode     = BlockSpecial
+  | fileType == regularFileMode      = RegularFile
+  | fileType == symbolicLinkMode     = SymbolicLink
+  | fileType == socketMode           = Socket
+  | otherwise = Unknown
+  where
+  fileType = mode .&. (#const S_IFMT)
 
--- TODO
+-- TODO remove this, this needs #define _GNU_SOURCE (i.e. linux specific)
 data RenameFlags
 
 cuintToRenameFlags :: CUInt -> RenameFlags
@@ -113,6 +167,10 @@ data AccessMode
 
 toAccessMode :: CInt -> AccessMode
 toAccessMode = _
+
+-- TODO move to another module?
+testBitSet :: Bits a => a -> a -> Bool
+testBitSet bits mask = bits .&. mask == mask
 
 -- TODO change the types of each field to @Maybe (foo -> bar -> IO baz)@
 -- TODO add low-level FuseOperations whose members are @FunPtr foo@
@@ -420,15 +478,15 @@ withCFuseOperations ops handler cont =
     filePath <- peekCString pFilePath
     (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
     let openFileFlags = OpenFileFlags
-          { append   = (#const O_APPEND)   .&. flags == (#const O_APPEND)
-          , nonBlock = (#const O_NONBLOCK) .&. flags == (#const O_NONBLOCK)
-          , trunc    = (#const O_TRUNC)    .&. flags == (#const O_TRUNC)
+          { append   = testBitSet flags (#const O_APPEND)
+          , nonBlock = testBitSet flags (#const O_NONBLOCK)
+          , trunc    = testBitSet flags (#const O_TRUNC)
           , exclusive = False
           , noctty    = False
           }
         openMode
-          | (#const O_RDWR)   .&. flags == (#const O_RDWR)   = ReadWrite
-          | (#const O_WRONLY) .&. flags == (#const O_WRONLY) = WriteOnly
+          | testBitSet flags (#const O_RDWR)   = ReadWrite
+          | testBitSet flags (#const O_WRONLY) = WriteOnly
           | otherwise = ReadOnly -- O_RDONLY
     (fuseOpen ops) filePath openMode openFileFlags >>= \case
       Left errno -> pure errno
