@@ -168,164 +168,164 @@ testBitSet bits mask = bits .&. mask == mask
 -- TODO add low-level FuseOperations whose members are @FunPtr foo@
 -- memo: when adding a new field, make sure to update withCFuseOperations
 data FuseOperations fh = FuseOperations
-  -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
-  --
-  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-  -- @Nothing@ even if it is open.
-  { fuseGetattr :: Maybe (FilePath -> Maybe fh -> IO (Either Errno FileStat))
+  { -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
+    --
+    -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+    -- @Nothing@ even if it is open.
+    fuseGetattr :: Maybe (FilePath -> Maybe fh -> IO (Either Errno FileStat))
 
-  -- | Implements 'System.Posix.Files.readSymbolicLink' operation (POSIX @readlink(2)@).
-  --
-  -- The returned 'FilePath' might be truncated depending on caller buffer size.
-  , fuseReadlink :: Maybe (FilePath -> IO (Either Errno FilePath))
+  , -- | Implements 'System.Posix.Files.readSymbolicLink' operation (POSIX @readlink(2)@).
+    --
+    -- The returned 'FilePath' might be truncated depending on caller buffer size.
+    fuseReadlink :: Maybe (FilePath -> IO (Either Errno FilePath))
 
-  -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
-  --
-  -- This function will also be called for regular file creation if 'fuseCreate' (TODO
-  -- name pending) is not defined.
-  , fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
+  , -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
+    --
+    -- This function will also be called for regular file creation if 'fuseCreate' (TODO
+    -- name pending) is not defined.
+    fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
 
-  -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
-  , fuseMkdir :: Maybe (FilePath -> FileMode -> IO Errno)
+  , -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
+    fuseMkdir :: Maybe (FilePath -> FileMode -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.removeLink' (POSIX @unlink(2)@).
-  , fuseUnlink :: Maybe (FilePath -> IO Errno)
+  , -- | Implements 'System.Posix.Files.removeLink' (POSIX @unlink(2)@).
+    fuseUnlink :: Maybe (FilePath -> IO Errno)
 
-  -- | Implements 'Ststen.Posix.Directory.removeDirectory' (POSIX @rmdir(2)@).
-  , fuseRmdir :: Maybe (FilePath -> IO Errno)
+  , -- | Implements 'Ststen.Posix.Directory.removeDirectory' (POSIX @rmdir(2)@).
+    fuseRmdir :: Maybe (FilePath -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.createSymbolicLink' (POSIX @symlink(2)@).
-  , fuseSymlink :: Maybe (FilePath -> FilePath -> IO Errno)
+  , -- | Implements 'System.Posix.Files.createSymbolicLink' (POSIX @symlink(2)@).
+    fuseSymlink :: Maybe (FilePath -> FilePath -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@).
-  , fuseRename :: Maybe (FilePath -> FilePath -> IO Errno)
+  , -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@).
+    fuseRename :: Maybe (FilePath -> FilePath -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.createLink' (POSIX @link(2)@).
-  , fuseLink :: Maybe (FilePath -> FilePath -> IO Errno)
+  , -- | Implements 'System.Posix.Files.createLink' (POSIX @link(2)@).
+    fuseLink :: Maybe (FilePath -> FilePath -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.setFileMode' (POSIX @chmod(2)@).
-  --
-  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-  -- @Nothing@ even if it is open.
-  , fuseChmod :: Maybe (FilePath -> Maybe fh -> FileMode -> IO Errno)
+  , -- | Implements 'System.Posix.Files.setFileMode' (POSIX @chmod(2)@).
+    --
+    -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+    -- @Nothing@ even if it is open.
+    fuseChmod :: Maybe (FilePath -> Maybe fh -> FileMode -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.setOwnerAndGroup' (POSIX @chown(2)@).
-  --
-  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-  -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
-  -- bits.
-  --
-  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseChown :: Maybe (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno)
+  , -- | Implements 'System.Posix.Files.setOwnerAndGroup' (POSIX @chown(2)@).
+    --
+    -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+    -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
+    -- bits.
+    --
+    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    fuseChown :: Maybe (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
-  --
-  -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-  -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
-  -- bits.
-  --
-  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseTruncate :: Maybe (FilePath -> Maybe fh -> FileOffset -> IO Errno)
+  , -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
+    --
+    -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+    -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
+    -- bits.
+    --
+    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    fuseTruncate :: Maybe (FilePath -> Maybe fh -> FileOffset -> IO Errno)
 
-  -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@).  On success, returns
-  -- 'Right' of a filehandle-like value that will be passed to future file operations; on
-  -- failure, returns 'Left' of the appropriate 'Errno'.
-  --
-  --   * Creation flags will be filtered out / handled by the kernel.
-  --   * Access modes should be used by this to check if the operation is permitted.
-  --   * TODO if "writeback caching" is relevant, describe their caveats
-  --     http://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
-  --
-  -- TODO expose FuseFileInfo to allow setting direct_io and keep_cache?
-  -- TODO what about fuse_conn_info.capable stuff?
-  , fuseOpen :: Maybe (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh))
+  , -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@).  On success, returns
+    -- 'Right' of a filehandle-like value that will be passed to future file operations; on
+    -- failure, returns 'Left' of the appropriate 'Errno'.
+    --
+    --   * Creation flags will be filtered out / handled by the kernel.
+    --   * Access modes should be used by this to check if the operation is permitted.
+    --   * TODO if "writeback caching" is relevant, describe their caveats
+    --     http://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
+    --
+    -- TODO expose FuseFileInfo to allow setting direct_io and keep_cache?
+    -- TODO what about fuse_conn_info.capable stuff?
+    fuseOpen :: Maybe (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh))
 
-  -- | Implements Unix98 @pread(2)@.
-  --
-  -- It differs from 'System.Posix.Files.fdRead' by the explicit 'FileOffset' argument.
-  , fuseRead :: Maybe (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString))
+  , -- | Implements Unix98 @pread(2)@.
+    --
+    -- It differs from 'System.Posix.Files.fdRead' by the explicit 'FileOffset' argument.
+    fuseRead :: Maybe (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString))
 
-  -- | Implements Unix98 @pwrite(2)@.
-  --
-  -- It differs from 'System.Posix.Files.fdWrite' by the explicit 'FileOffset' argument.
-  --
-  -- This method is expected to reset the setuid and setgid bits.
-  --
-  -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseWrite :: Maybe (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt))
+  , -- | Implements Unix98 @pwrite(2)@.
+    --
+    -- It differs from 'System.Posix.Files.fdWrite' by the explicit 'FileOffset' argument.
+    --
+    -- This method is expected to reset the setuid and setgid bits.
+    --
+    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    fuseWrite :: Maybe (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt))
 
-  -- | Implements @statfs(2)@. TODO describe ignored fields
-  , fuseStatfs :: Maybe (String -> IO (Either Errno FileSystemStats))
+  , -- | Implements @statfs(2)@. TODO describe ignored fields
+    fuseStatfs :: Maybe (String -> IO (Either Errno FileSystemStats))
 
-  -- | Called when @close(2)@ has been called on an open file.
-  --
-  -- Note: this does not mean that the file is released.  This function may be called more
-  -- than once for each @open(2)@.  The return value is passed on to the @close(2)@ system
-  -- call.
-  , fuseFlush :: Maybe (FilePath -> fh -> IO Errno)
+  , -- | Called when @close(2)@ has been called on an open file.
+    --
+    -- Note: this does not mean that the file is released.  This function may be called more
+    -- than once for each @open(2)@.  The return value is passed on to the @close(2)@ system
+    -- call.
+    fuseFlush :: Maybe (FilePath -> fh -> IO Errno)
 
-  -- | Called when an open file has all file descriptors closed and all memory mappings
-  -- unmapped.
-  --
-  -- For every @open@ call there will be exactly one @release@ call with the same flags.
-  -- It is possible to have a file opened more than once, in which case only the last
-  -- release will mean that no more reads or writes will happen on the file.
-  , fuseRelease :: Maybe (FilePath -> fh -> IO ())
+  , -- | Called when an open file has all file descriptors closed and all memory mappings
+    -- unmapped.
+    --
+    -- For every @open@ call there will be exactly one @release@ call with the same flags.
+    -- It is possible to have a file opened more than once, in which case only the last
+    -- release will mean that no more reads or writes will happen on the file.
+    fuseRelease :: Maybe (FilePath -> fh -> IO ())
 
-  -- | Implements @fsync(2)@.
-  , fuseFsync :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
+  , -- | Implements @fsync(2)@.
+    fuseFsync :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
-  -- TODO , setxattr :: _
-  -- TODO , getxattr :: _
-  -- TODO , listxattr :: _
-  -- TODO , removexattr :: _
+    -- TODO , setxattr :: _
+    -- TODO , getxattr :: _
+    -- TODO , listxattr :: _
+    -- TODO , removexattr :: _
 
-  -- | Implements @opendir(3)@.
-  --
-  -- This method should check if the open operation is permitted for this directory.
-  , fuseOpendir :: Maybe (FilePath -> IO (Either Errno fh))
+  , -- | Implements @opendir(3)@.
+    --
+    -- This method should check if the open operation is permitted for this directory.
+    fuseOpendir :: Maybe (FilePath -> IO (Either Errno fh))
 
-  -- | Implements @readdir(3)@.
-  --
-  -- The entire contents of the directory should be returned as a list of tuples
-  -- (corresponding to the first mode of operation documented in @fuse.h@).
-  , fuseReaddir :: Maybe (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)]))
+  , -- | Implements @readdir(3)@.
+    --
+    -- The entire contents of the directory should be returned as a list of tuples
+    -- (corresponding to the first mode of operation documented in @fuse.h@).
+    fuseReaddir :: Maybe (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)]))
 
-  -- | Implements @closedir(3)@.
-  , fuseReleasedir :: Maybe (FilePath -> fh -> IO Errno)
+  , -- | Implements @closedir(3)@.
+    fuseReleasedir :: Maybe (FilePath -> fh -> IO Errno)
 
-  -- | Synchronize the directory's contents; analogous to 'fuseSynchronizeFile'.
-  , fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
+  , -- | Synchronize the directory's contents; analogous to 'fuseSynchronizeFile'.
+    fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
-  -- | Initializes the filesystem.  This is called before all other operations.
-  , fuseInit :: Maybe (IO ())
+  , -- | Initializes the filesystem.  This is called before all other operations.
+    fuseInit :: Maybe (IO ())
 
-  -- | Called on filesystem exit to allow cleanup.
-  , fuseDestroy :: Maybe (IO ())
+  , -- | Called on filesystem exit to allow cleanup.
+    fuseDestroy :: Maybe (IO ())
 
-  -- | Implements 'System.Posix.Files.fileAccess' and 'System.Posix.Files.fileExist
-  -- (POSIX @access(2)@).
-  --
-  -- Checks file access permissions as requested by an `AccessMode`.
-  --
-  -- If the @default_permissions@ mount option is given, this method is not called. This
-  -- method is also not called under Linux kernel versions 2.4.x
-  --
-  -- TODO add notes about @default_permissions@ to other relevant handlers
-  , fuseAccess :: Maybe (FilePath -> AccessMode -> IO Errno)
+  , -- | Implements 'System.Posix.Files.fileAccess' and 'System.Posix.Files.fileExist
+    -- (POSIX @access(2)@).
+    --
+    -- Checks file access permissions as requested by an `AccessMode`.
+    --
+    -- If the @default_permissions@ mount option is given, this method is not called. This
+    -- method is also not called under Linux kernel versions 2.4.x
+    --
+    -- TODO add notes about @default_permissions@ to other relevant handlers
+    fuseAccess :: Maybe (FilePath -> AccessMode -> IO Errno)
 
-  -- TODO , create :: _
-  -- TODO , lock :: _
-  -- TODO , utimens :: _
-  -- TODO , bmap :: _
-  -- TODO , ioctl :: _
-  -- TODO , poll :: _
-  -- TODO , write_buf :: _
-  -- TODO , read_buf :: _
-  -- TODO , flock :: _
-  -- TODO , fallocate :: _
-  -- TODO , copy_file_range :: _
-  -- TODO , lseek :: _
+    -- TODO , create :: _
+    -- TODO , lock :: _
+    -- TODO , utimens :: _
+    -- TODO , bmap :: _
+    -- TODO , ioctl :: _
+    -- TODO , poll :: _
+    -- TODO , write_buf :: _
+    -- TODO , read_buf :: _
+    -- TODO , flock :: _
+    -- TODO , fallocate :: _
+    -- TODO , copy_file_range :: _
+    -- TODO , lseek :: _
   }
 
 -- | Empty \/ default versions of the FUSE operations.

@@ -13,22 +13,22 @@ import System.Posix.Types
 -- The 'Storable' instance targets C @struct statvfs@. @f_favail@, @f_fsid@ and @f_flag@
 -- fields are ignored.
 data FileSystemStats = FileSystemStats
-  -- | Filesystem block size. @f_bsize@ TODO look up the FUSE default. (512?)
-  { blockSize :: CULong
-  -- | Fragment size. @f_frsize@
-  , fragmentSize :: CULong
-  -- | Size of the filesystem in @f_frsize@ units. @f_blocks@
-  , blockCount :: CFsBlkCnt
-  -- | Number of free blocks. @f_bfree@
-  , blocksFree :: CFsBlkCnt
-  -- | Number of free blocks for unprivileged users. @f_bavail@
-  , blocksAvailable :: CFsBlkCnt
-  -- | Number of inodes (file nodes). @f_files@
-  , fileCount :: CFsFilCnt
-  -- | Number of free inodes. @f_ffree@
-  , filesFree :: CFsFilCnt
-  -- | Maximum filename length. @f_namemax@
-  , maxNameLength :: CULong
+  { -- | Filesystem block size. @f_bsize@ TODO look up the FUSE default. (512?)
+    blockSize :: CULong
+  , -- | Fragment size. @f_frsize@
+    fragmentSize :: CULong
+  , -- | Size of the filesystem in @f_frsize@ units. @f_blocks@
+    blockCount :: CFsBlkCnt
+  , -- | Number of free blocks. @f_bfree@
+    blocksFree :: CFsBlkCnt
+  , -- | Number of free blocks for unprivileged users. @f_bavail@
+    blocksAvailable :: CFsBlkCnt
+  , -- | Number of inodes (file nodes). @f_files@
+    fileCount :: CFsFilCnt
+  , -- | Number of free inodes. @f_ffree@
+    filesFree :: CFsFilCnt
+  , -- | Maximum filename length. @f_namemax@
+    maxNameLength :: CULong
   }
   deriving (Eq, Show)
 
