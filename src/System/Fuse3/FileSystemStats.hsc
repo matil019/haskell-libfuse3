@@ -4,10 +4,11 @@ module System.Fuse3.FileSystemStats where
 
 #include <sys/statvfs.h>
 
--- TODO no all-in imports
-import Foreign
-import Foreign.C
-import System.Posix.Types
+import Foreign (Storable, peekByteOff, pokeByteOff)
+import Foreign.C (CULong)
+import System.Posix.Types (CFsBlkCnt, CFsFilCnt)
+
+import qualified Foreign
 
 -- | Passed to 'fuseGetFileSystemStats'.
 --

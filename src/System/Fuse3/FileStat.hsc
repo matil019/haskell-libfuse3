@@ -4,9 +4,7 @@ module System.Fuse3.FileStat where
 
 #include <sys/stat.h>
 
--- TODO no all-in imports
-import Foreign
-
+import Foreign (Storable, alloca, castPtr, peek, peekByteOff, pokeByteOff)
 import System.Clock (TimeSpec)
 import System.Posix.Error (throwErrnoPathIfMinus1Retry_)
 import System.Posix.Internals (c_stat, withFilePath)
@@ -19,6 +17,8 @@ import System.Posix.Types
   , LinkCount
   , UserID
   )
+
+import qualified Foreign
 
 -- Ptr FileStat === Ptr CStat
 data FileStat = FileStat
