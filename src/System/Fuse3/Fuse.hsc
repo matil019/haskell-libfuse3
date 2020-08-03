@@ -44,7 +44,6 @@ import FileSystemStats (FileSystemStats)
 import Foreign
   ( FunPtr
   , Ptr
-  , alloca
   , allocaBytes
   , callocBytes
   , castPtrToStablePtr
@@ -83,6 +82,7 @@ import qualified System.Posix.IO
 import qualified System.Posix.Signals as Signals
 
 #include <fuse.h>
+#include <fuse_lowlevel.h>
 
 -- | The Unix type of a node in the filesystem.
 data EntryType
@@ -609,26 +609,22 @@ withCFuseOperations ops handler cont =
 -- TODO the second part of tuple may be unused
 fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Maybe (Maybe String, Bool, Bool))
 fuseParseCommandLine pArgs =
-  alloca $ \pMountPt ->
-  alloca $ \pMultiThreaded ->
-  alloca $ \pFG -> do
-    -- TODO do we need to poke here?
-    poke pMultiThreaded 0
-    poke pFG 0
-    retval <- C.fuse_parse_cmdline pArgs pMountPt pMultiThreaded pFG
+  allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> do
+    retval <- C.fuse_parse_cmdline pArgs pOpts
     if retval == 0
       then do
-        cMountPt <- peek pMountPt
-        mountPt <- if cMountPt /= nullPtr
-          then do
-            a <- peekCString cMountPt
-            -- TODO why free?
-            free cMountPt
-            pure $ Just a
-          else pure Nothing
-        multiThreaded <- peek pMultiThreaded
-        foreground <- peek pFG
-        pure $ Just (mountPt, multiThreaded == 1, foreground == 1)
+        mountPoint <- do
+          pMountPoint <- (#peek struct fuse_cmdline_opts, mountpoint) pOpts
+          if pMountPoint /= nullPtr
+            then do
+              a <- peekCString pMountPoint
+              -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
+              free pMountPoint
+              pure $ Just a
+            else pure Nothing
+        multiThreaded <- (== (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, singlethread) pOpts
+        foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
+        pure $ Just (mountPoint, multiThreaded, foreground)
       else pure Nothing
 
 -- Haskell version of @daemon(2)@

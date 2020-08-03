@@ -14,6 +14,8 @@ data FuseArgs -- struct fuse_args
 
 data FuseBuf -- struct fuse_buf
 
+data FuseCmdlineOpts -- struct fuse_cmdline_opts
+
 data FuseConfig -- struct fuse_config
 
 data FuseConnInfo -- struct fuse_conn_info
@@ -59,8 +61,7 @@ foreign import ccall safe "fuse_session_exit"
   fuse_session_exit :: Ptr FuseSession -> IO ()
 
 foreign import ccall safe "fuse_parse_cmdline"
-  fuse_parse_cmdline :: Ptr FuseArgs -> Ptr CString -> Ptr Int -> Ptr Int -> IO Int
-  -- TODO fuse_parse_cmdline :: Ptr FuseArgs -> Ptr FuseCmdlineOpts -> IO CInt
+  fuse_parse_cmdline :: Ptr FuseArgs -> Ptr FuseCmdlineOpts -> IO CInt
 
 foreign import ccall unsafe "fuse_session_next_chan"
   fuse_session_next_chan :: Ptr FuseSession -> Ptr FuseChan -> IO (Ptr FuseChan)
