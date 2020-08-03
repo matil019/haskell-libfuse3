@@ -1,6 +1,7 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK no-print-missing-docs #-}
 {-| Based on `System.Fuse` in the package "HFuse-0.2.5.0".
 
 TODO move to LICENSE
@@ -34,8 +35,7 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 -}
-module System.Fuse3.Fuse where
--- TODO rename to System.Fuse3.Internal
+module System.Fuse3.Internal where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad ((>=>), unless, void)

@@ -8,7 +8,7 @@ import Data.List (foldl')
 import Foreign.C (CInt, Errno, eIO, eNOENT, eOK)
 import FileStat (FileStat(FileStat))
 import System.Clock (Clock(Realtime), getTime)
-import System.Fuse3.Fuse (defaultFuseOps, fuseMain)
+import System.Fuse3 (defaultFuseOps, fuseMain)
 import System.IO (hPrint, stderr)
 import System.Posix.Files (groupReadMode, otherReadMode, ownerReadMode, ownerWriteMode, regularFileMode, unionFileModes)
 import System.Posix.User (getRealGroupID, getRealUserID)
@@ -16,7 +16,7 @@ import System.Posix.Types (ByteCount, FileOffset)
 
 import qualified Data.ByteString as B
 import qualified FileStat
-import qualified System.Fuse3.Fuse as Fuse
+import qualified System.Fuse3 as Fuse
 
 nullGetattr :: FilePath -> IO (Either Errno FileStat)
 nullGetattr "/" = do

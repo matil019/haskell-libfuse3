@@ -20,7 +20,8 @@ library
   -- TODO organize module structure
   exposed-modules:     FileStat
                        FileSystemStats
-                       System.Fuse3.Fuse
+                       System.Fuse3
+                       System.Fuse3.Internal
                        System.Fuse3.Internal.C
   -- other-modules:
   -- other-extensions:
