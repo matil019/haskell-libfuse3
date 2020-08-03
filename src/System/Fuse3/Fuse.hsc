@@ -55,7 +55,6 @@ import Foreign
   , maybePeek
   , newStablePtr
   , nullPtr
-  , peek
   , peekByteOff
   , poke
   , pokeByteOff
@@ -73,7 +72,7 @@ import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
-import System.Posix.Types (ByteCount, CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CUid(CUid), DeviceID, Fd, FileMode, FileOffset, GroupID, UserID)
+import System.Posix.Types (ByteCount, CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CUid(CUid), DeviceID, FileMode, FileOffset, GroupID, UserID)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
@@ -670,63 +669,16 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
--- TODO do we need `C.FuseBuf`?
-handleOnce :: Ptr C.FuseSession -> Ptr C.FuseBuf -> Ptr C.FuseChan -> IO ()
-handleOnce session buf chan = do
-  size <- C.fuse_chan_bufsize chan
-  allocaBytes (fromIntegral size) $ \ptr -> do
-    #{poke struct fuse_buf, mem}  buf ptr
-    #{poke struct fuse_buf, size} buf size
-    with chan $ \chanP -> do
-      C.fuse_session_receive_buf session buf chanP
-      C.fuse_session_process_buf session buf =<< peek chanP
-
-forAllChans
-  :: Ptr C.FuseSession
-  -> (Ptr C.FuseChan -> IO a -> IO a)
-  -> IO a
-  -> IO a
-forAllChans session fun cont = go nullPtr
-  where
-  go cur = do
-    new <- C.fuse_session_next_chan session cur
-    if new == nullPtr
-      then cont
-      else fun new $ go new
-
--- TODO: Add an unregister function to run as well
-runInline
-  :: (Fd -> IO () -> IO b)
-  -> (b -> IO ())
-  -> (Either String () -> IO a) -- TODO change to (IO a)
-  -> Ptr C.StructFuse
-  -> IO a
-runInline register unregister act pFuse = bracket
-  (callocBytes #{size struct fuse_buf}) free $ \buf -> do
-    session <- C.fuse_get_session pFuse
-    let registerChan chan cont = do
-          fd <- C.fuse_chan_fd chan
-          bracket
-            (register fd (handleOnce session buf chan))
-            unregister
-            (const cont)
-    ret <- forAllChans session registerChan $ withSignalHandlers (C.fuse_session_exit session) $ act $ Right ()
-    C.fuse_session_exit session
-    pure ret
-
 -- Mounts the filesystem, forks, and then starts fuse
 fuseMainReal
-  :: Maybe (Fd -> IO () -> IO b, b -> IO (), Either String () -> IO a)
-  -> Bool
+  :: Bool
   -> Ptr C.StructFuse
   -> String
   -> IO a
-fuseMainReal = \inline foreground pFuse mountPt ->
-  let strategy = case inline of
-        Just (register, unregister, act) -> runInline register unregister act
-        Nothing -> if foreground
-          then (>>) (changeWorkingDirectory "/") . procMain
-          else daemon . procMain
+fuseMainReal = \foreground pFuse mountPt ->
+  let strategy = if foreground
+        then (>>) (changeWorkingDirectory "/") . procMain
+        else daemon . procMain
   in withCString mountPt $ \cMountPt -> do
        -- TODO handle failure! (return value /= 0) throw? return Left?
        _ <- C.fuse_mount pFuse cMountPt
@@ -761,7 +713,7 @@ fuseRun prog args ops handler =
                 -- but it's unlikely because fuseParseCommandLine already succeeded at this point
                 -- TODO dispose pFuse? (@fuse_destroy@)
                 pFuse <- C.fuse_new pArgs pOp opSize privData
-                fuseMainReal Nothing foreground pFuse mountPt)
+                fuseMainReal foreground pFuse mountPt)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
