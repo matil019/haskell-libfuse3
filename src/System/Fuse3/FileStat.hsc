@@ -7,7 +7,7 @@ module System.Fuse3.FileStat where
 import Foreign (Storable, alloca, castPtr, peek, peekByteOff, pokeByteOff)
 import System.Clock (TimeSpec)
 import System.Posix.Error (throwErrnoPathIfMinus1Retry_)
-import System.Posix.Internals (c_stat, withFilePath)
+import System.Posix.Internals (lstat, withFilePath)
 import System.Posix.Types
   ( CBlkSize
   , DeviceID
@@ -66,9 +66,12 @@ instance Storable FileStat where
     (#poke struct stat, st_mtim)   ptr modificationTimeHiRes
     (#poke struct stat, st_ctim)   ptr statusChangeTimeHiRes
 
+-- | Reads a file status of a given file.
+--
+-- Calls @lstat@.
 getFileStat :: FilePath -> IO FileStat
 getFileStat path =
   alloca $ \buf ->
     withFilePath path $ \cpath -> do
-      throwErrnoPathIfMinus1Retry_ "getFileStat" path (c_stat cpath (castPtr buf))
+      throwErrnoPathIfMinus1Retry_ "getFileStat" path (lstat cpath (castPtr buf))
       peek buf
