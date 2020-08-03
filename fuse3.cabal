@@ -18,8 +18,7 @@ extra-source-files:  CHANGELOG.md
 
 library
   -- TODO organize module structure
-  exposed-modules:     Args
-                       FileStat
+  exposed-modules:     FileStat
                        FileSystemStats
                        System.Fuse3.Fuse
                        System.Fuse3.Internal.C
@@ -31,7 +30,6 @@ library
                      , unix
   pkgconfig-depends:   fuse3
   hs-source-dirs:      src
-  c-sources:           cbits/foo.c
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
   cc-options:          -DFUSE_USE_VERSION=31
