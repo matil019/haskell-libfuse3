@@ -63,7 +63,7 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), Errno(Errno), eOK, peekCString, withCString, withCStringLen)
+import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), Errno(Errno), eNOSYS, eOK, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
@@ -325,6 +325,37 @@ data FuseOperations fh = FuseOperations
   -- TODO , fallocate :: _
   -- TODO , copy_file_range :: _
   -- TODO , lseek :: _
+  }
+
+-- | Empty \/ default versions of the FUSE operations.
+defaultFuseOps :: FuseOperations fh
+defaultFuseOps = FuseOperations
+  { fuseGetFileStat = \_ _ -> pure (Left eNOSYS)
+  , fuseReadSymbolicLink = \_ -> pure (Left eNOSYS)
+  , fuseCreateDevice = \_ _ _ _ -> pure eNOSYS
+  , fuseCreateDirectory = \_ _ -> pure eNOSYS
+  , fuseRemoveLink = \_ -> pure eNOSYS
+  , fuseRemoveDirectory = \_ -> pure eNOSYS
+  , fuseCreateSymbolicLink = \_ _ -> pure eNOSYS
+  , fuseRename = \_ _ -> pure eNOSYS
+  , fuseCreateLink = \_ _ -> pure eNOSYS
+  , fuseSetFileMode = \_ _ _ -> pure eNOSYS
+  , fuseSetOwnerAndGroup = \_ _ _ _ -> pure eNOSYS
+  , fuseSetFileSize = \_ _ _ -> pure eNOSYS
+  , fuseOpen = \_ _ _ -> pure (Left eNOSYS)
+  , fuseRead = \_ _ _ _ -> pure (Left eNOSYS)
+  , fuseWrite = \_ _ _ _ -> pure (Left eNOSYS)
+  , fuseGetFileSystemStats = \_ -> pure (Left eNOSYS)
+  , fuseFlush = \_ _ -> pure eOK
+  , fuseRelease = \_ _ -> pure ()
+  , fuseSynchronizeFile = \_ _ _ -> pure eNOSYS
+  , fuseOpenDirectory = \_ -> pure (Left eNOSYS)
+  , fuseReadDirectory = \_ _ -> pure (Left eNOSYS)
+  , fuseReleaseDirectory = \_ _ -> pure eNOSYS
+  , fuseSynchronizeDirectory = \_ _ _ -> pure eNOSYS
+  , fuseInit = pure ()
+  , fuseDestroy = pure ()
+  , fuseAccess = \_ _ -> pure eNOSYS
   }
 
 -- Allocates a fuse_args struct to hold the commandline arguments.
@@ -629,7 +660,7 @@ fuseParseCommandLine pArgs =
 -- Haskell version of @daemon(2)@
 --
 -- Mimics @daemon()@'s use of @_exit()@ instead of @exit()@; we depend on this in
--- `fuseMainRealP, because otherwise we'll unmount the filesystem when the foreground process exits.
+-- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground process exits.
 daemon :: IO a -> IO b
 -- `exitImmediately` never returns. This `error` is only here to please the
 -- typechecker.
