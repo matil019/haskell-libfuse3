@@ -72,6 +72,7 @@ import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
 import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
+import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
 import System.Posix.Types (ByteCount, CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CUid(CUid), DeviceID, FileMode, FileOffset, GroupID, UserID)
@@ -96,30 +97,6 @@ data EntryType
   | SymbolicLink
   | Socket
   deriving (Eq, Show)
-
-fileTypeModes :: FileMode
-fileTypeModes = (#const S_IFMT)
-
-blockSpecialMode :: FileMode
-blockSpecialMode = (#const S_IFBLK)
-
-characterSpecialMode :: FileMode
-characterSpecialMode = (#const S_IFCHR)
-
-namedPipeMode :: FileMode
-namedPipeMode = (#const S_IFIFO)
-
-regularFileMode :: FileMode
-regularFileMode = (#const S_IFREG)
-
-directoryMode :: FileMode
-directoryMode = (#const S_IFDIR)
-
-symbolicLinkMode :: FileMode
-symbolicLinkMode = (#const S_IFLNK)
-
-socketMode :: FileMode
-socketMode = (#const S_IFSOCK)
 
 -- | Converts an 'EntryType' into the corresponding POSIX 'FileMode'.
 entryTypeToFileMode :: EntryType -> FileMode
