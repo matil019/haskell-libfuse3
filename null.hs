@@ -59,9 +59,9 @@ main :: IO ()
 main = fuseMain ops (\e -> hPrint stderr (e :: SomeException) >> pure eIO)
   where
   ops = defaultFuseOps
-    { Fuse.fuseGetFileStat = \fp _ -> nullGetattr fp
-    , Fuse.fuseSetFileSize = \fp _ off -> nullTruncate fp off
-    , Fuse.fuseOpen = \fp _ _ -> nullOpen fp
-    , Fuse.fuseRead = \fp _ sz off -> nullRead fp sz off
-    , Fuse.fuseWrite = \fp _ buf off -> nullWrite fp buf off
+    { Fuse.fuseGetattr = Just $ \fp _ -> nullGetattr fp
+    , Fuse.fuseTruncate = Just $ \fp _ off -> nullTruncate fp off
+    , Fuse.fuseOpen = Just $ \fp _ _ -> nullOpen fp
+    , Fuse.fuseRead = Just $ \fp _ sz off -> nullRead fp sz off
+    , Fuse.fuseWrite = Just $ \fp _ buf off -> nullWrite fp buf off
     }

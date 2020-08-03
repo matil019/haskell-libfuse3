@@ -36,7 +36,7 @@ module System.Fuse3.Fuse where
 -- TODO rename to System.Fuse3.Internal
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
-import Control.Monad (unless, void)
+import Control.Monad ((>=>), unless, void)
 import Data.Bits ((.&.), Bits)
 import Data.Foldable (traverse_)
 import FileStat (FileStat)
@@ -51,9 +51,11 @@ import Foreign
   , copyArray
   , deRefStablePtr
   , free
+  , freeHaskellFunPtr
   , freeStablePtr
   , maybePeek
   , newStablePtr
+  , nullFunPtr
   , nullPtr
   , peekByteOff
   , poke
@@ -63,7 +65,7 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), Errno(Errno), eNOSYS, eOK, peekCString, withCString, withCStringLen)
+import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), Errno(Errno), eOK, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
@@ -163,7 +165,6 @@ data AccessMode = FileOK | PermOK Bool Bool Bool
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
 
--- TODO change the types of each field to @Maybe (foo -> bar -> IO baz)@
 -- TODO add low-level FuseOperations whose members are @FunPtr foo@
 -- memo: when adding a new field, make sure to update withCFuseOperations
 data FuseOperations fh = FuseOperations
@@ -171,42 +172,42 @@ data FuseOperations fh = FuseOperations
   --
   -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
   -- @Nothing@ even if it is open.
-  { fuseGetFileStat :: FilePath -> Maybe fh -> IO (Either Errno FileStat)
+  { fuseGetattr :: Maybe (FilePath -> Maybe fh -> IO (Either Errno FileStat))
 
   -- | Implements 'System.Posix.Files.readSymbolicLink' operation (POSIX @readlink(2)@).
   --
   -- The returned 'FilePath' might be truncated depending on caller buffer size.
-  , fuseReadSymbolicLink :: FilePath -> IO (Either Errno FilePath)
+  , fuseReadlink :: Maybe (FilePath -> IO (Either Errno FilePath))
 
   -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
   --
   -- This function will also be called for regular file creation if 'fuseCreate' (TODO
   -- name pending) is not defined.
-  , fuseCreateDevice :: FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno
+  , fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
 
   -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
-  , fuseCreateDirectory :: FilePath -> FileMode -> IO Errno
+  , fuseMkdir :: Maybe (FilePath -> FileMode -> IO Errno)
 
   -- | Implements 'System.Posix.Files.removeLink' (POSIX @unlink(2)@).
-  , fuseRemoveLink :: FilePath -> IO Errno
+  , fuseUnlink :: Maybe (FilePath -> IO Errno)
 
   -- | Implements 'Ststen.Posix.Directory.removeDirectory' (POSIX @rmdir(2)@).
-  , fuseRemoveDirectory :: FilePath -> IO Errno
+  , fuseRmdir :: Maybe (FilePath -> IO Errno)
 
   -- | Implements 'System.Posix.Files.createSymbolicLink' (POSIX @symlink(2)@).
-  , fuseCreateSymbolicLink :: FilePath -> FilePath -> IO Errno
+  , fuseSymlink :: Maybe (FilePath -> FilePath -> IO Errno)
 
   -- | Implements 'System.Posix.Files.rename' (POSIX @rename(2)@).
-  , fuseRename :: FilePath -> FilePath -> IO Errno
+  , fuseRename :: Maybe (FilePath -> FilePath -> IO Errno)
 
   -- | Implements 'System.Posix.Files.createLink' (POSIX @link(2)@).
-  , fuseCreateLink :: FilePath -> FilePath -> IO Errno
+  , fuseLink :: Maybe (FilePath -> FilePath -> IO Errno)
 
   -- | Implements 'System.Posix.Files.setFileMode' (POSIX @chmod(2)@).
   --
   -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
   -- @Nothing@ even if it is open.
-  , fuseSetFileMode :: FilePath -> Maybe fh -> FileMode -> IO Errno
+  , fuseChmod :: Maybe (FilePath -> Maybe fh -> FileMode -> IO Errno)
 
   -- | Implements 'System.Posix.Files.setOwnerAndGroup' (POSIX @chown(2)@).
   --
@@ -215,7 +216,7 @@ data FuseOperations fh = FuseOperations
   -- bits.
   --
   -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseSetOwnerAndGroup :: FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno
+  , fuseChown :: Maybe (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno)
 
   -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
   --
@@ -224,7 +225,7 @@ data FuseOperations fh = FuseOperations
   -- bits.
   --
   -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseSetFileSize :: FilePath -> Maybe fh -> FileOffset -> IO Errno
+  , fuseTruncate :: Maybe (FilePath -> Maybe fh -> FileOffset -> IO Errno)
 
   -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@).  On success, returns
   -- 'Right' of a filehandle-like value that will be passed to future file operations; on
@@ -237,12 +238,12 @@ data FuseOperations fh = FuseOperations
   --
   -- TODO expose FuseFileInfo to allow setting direct_io and keep_cache?
   -- TODO what about fuse_conn_info.capable stuff?
-  , fuseOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)
+  , fuseOpen :: Maybe (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh))
 
   -- | Implements Unix98 @pread(2)@.
   --
   -- It differs from 'System.Posix.Files.fdRead' by the explicit 'FileOffset' argument.
-  , fuseRead :: FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)
+  , fuseRead :: Maybe (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString))
 
   -- | Implements Unix98 @pwrite(2)@.
   --
@@ -251,17 +252,17 @@ data FuseOperations fh = FuseOperations
   -- This method is expected to reset the setuid and setgid bits.
   --
   -- TODO FUSE_CAP_HANDLE_KILLPRIV?
-  , fuseWrite :: FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt)
+  , fuseWrite :: Maybe (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt))
 
   -- | Implements @statfs(2)@. TODO describe ignored fields
-  , fuseGetFileSystemStats :: String -> IO (Either Errno FileSystemStats)
+  , fuseStatfs :: Maybe (String -> IO (Either Errno FileSystemStats))
 
   -- | Called when @close(2)@ has been called on an open file.
   --
   -- Note: this does not mean that the file is released.  This function may be called more
   -- than once for each @open(2)@.  The return value is passed on to the @close(2)@ system
   -- call.
-  , fuseFlush :: FilePath -> fh -> IO Errno
+  , fuseFlush :: Maybe (FilePath -> fh -> IO Errno)
 
   -- | Called when an open file has all file descriptors closed and all memory mappings
   -- unmapped.
@@ -269,10 +270,10 @@ data FuseOperations fh = FuseOperations
   -- For every @open@ call there will be exactly one @release@ call with the same flags.
   -- It is possible to have a file opened more than once, in which case only the last
   -- release will mean that no more reads or writes will happen on the file.
-  , fuseRelease :: FilePath -> fh -> IO ()
+  , fuseRelease :: Maybe (FilePath -> fh -> IO ())
 
   -- | Implements @fsync(2)@.
-  , fuseSynchronizeFile :: FilePath -> fh -> SyncType -> IO Errno
+  , fuseFsync :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
   -- TODO , setxattr :: _
   -- TODO , getxattr :: _
@@ -282,25 +283,25 @@ data FuseOperations fh = FuseOperations
   -- | Implements @opendir(3)@.
   --
   -- This method should check if the open operation is permitted for this directory.
-  , fuseOpenDirectory :: FilePath -> IO (Either Errno fh)
+  , fuseOpendir :: Maybe (FilePath -> IO (Either Errno fh))
 
   -- | Implements @readdir(3)@.
   --
   -- The entire contents of the directory should be returned as a list of tuples
   -- (corresponding to the first mode of operation documented in @fuse.h@).
-  , fuseReadDirectory :: FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])
+  , fuseReaddir :: Maybe (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)]))
 
   -- | Implements @closedir(3)@.
-  , fuseReleaseDirectory :: FilePath -> fh -> IO Errno
+  , fuseReleasedir :: Maybe (FilePath -> fh -> IO Errno)
 
   -- | Synchronize the directory's contents; analogous to 'fuseSynchronizeFile'.
-  , fuseSynchronizeDirectory :: FilePath -> fh -> SyncType -> IO Errno
+  , fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
   -- | Initializes the filesystem.  This is called before all other operations.
-  , fuseInit :: IO ()
+  , fuseInit :: Maybe (IO ())
 
   -- | Called on filesystem exit to allow cleanup.
-  , fuseDestroy :: IO ()
+  , fuseDestroy :: Maybe (IO ())
 
   -- | Implements 'System.Posix.Files.fileAccess' and 'System.Posix.Files.fileExist
   -- (POSIX @access(2)@).
@@ -311,7 +312,7 @@ data FuseOperations fh = FuseOperations
   -- method is also not called under Linux kernel versions 2.4.x
   --
   -- TODO add notes about @default_permissions@ to other relevant handlers
-  , fuseAccess :: FilePath -> AccessMode -> IO Errno
+  , fuseAccess :: Maybe (FilePath -> AccessMode -> IO Errno)
 
   -- TODO , create :: _
   -- TODO , lock :: _
@@ -330,32 +331,32 @@ data FuseOperations fh = FuseOperations
 -- | Empty \/ default versions of the FUSE operations.
 defaultFuseOps :: FuseOperations fh
 defaultFuseOps = FuseOperations
-  { fuseGetFileStat = \_ _ -> pure (Left eNOSYS)
-  , fuseReadSymbolicLink = \_ -> pure (Left eNOSYS)
-  , fuseCreateDevice = \_ _ _ _ -> pure eNOSYS
-  , fuseCreateDirectory = \_ _ -> pure eNOSYS
-  , fuseRemoveLink = \_ -> pure eNOSYS
-  , fuseRemoveDirectory = \_ -> pure eNOSYS
-  , fuseCreateSymbolicLink = \_ _ -> pure eNOSYS
-  , fuseRename = \_ _ -> pure eNOSYS
-  , fuseCreateLink = \_ _ -> pure eNOSYS
-  , fuseSetFileMode = \_ _ _ -> pure eNOSYS
-  , fuseSetOwnerAndGroup = \_ _ _ _ -> pure eNOSYS
-  , fuseSetFileSize = \_ _ _ -> pure eNOSYS
-  , fuseOpen = \_ _ _ -> pure (Left eNOSYS)
-  , fuseRead = \_ _ _ _ -> pure (Left eNOSYS)
-  , fuseWrite = \_ _ _ _ -> pure (Left eNOSYS)
-  , fuseGetFileSystemStats = \_ -> pure (Left eNOSYS)
-  , fuseFlush = \_ _ -> pure eOK
-  , fuseRelease = \_ _ -> pure ()
-  , fuseSynchronizeFile = \_ _ _ -> pure eNOSYS
-  , fuseOpenDirectory = \_ -> pure (Left eNOSYS)
-  , fuseReadDirectory = \_ _ -> pure (Left eNOSYS)
-  , fuseReleaseDirectory = \_ _ -> pure eNOSYS
-  , fuseSynchronizeDirectory = \_ _ _ -> pure eNOSYS
-  , fuseInit = pure ()
-  , fuseDestroy = pure ()
-  , fuseAccess = \_ _ -> pure eNOSYS
+  { fuseGetattr = Nothing
+  , fuseReadlink = Nothing
+  , fuseMknod = Nothing
+  , fuseMkdir = Nothing
+  , fuseUnlink = Nothing
+  , fuseRmdir = Nothing
+  , fuseSymlink = Nothing
+  , fuseRename = Nothing
+  , fuseLink = Nothing
+  , fuseChmod = Nothing
+  , fuseChown = Nothing
+  , fuseTruncate = Nothing
+  , fuseOpen = Nothing
+  , fuseRead = Nothing
+  , fuseWrite = Nothing
+  , fuseStatfs = Nothing
+  , fuseFlush = Nothing
+  , fuseRelease = Nothing
+  , fuseFsync = Nothing
+  , fuseOpendir = Nothing
+  , fuseReaddir = Nothing
+  , fuseReleasedir = Nothing
+  , fuseFsyncdir = Nothing
+  , fuseInit = Nothing
+  , fuseDestroy = Nothing
+  , fuseAccess = Nothing
   }
 
 -- Allocates a fuse_args struct to hold the commandline arguments.
@@ -374,42 +375,46 @@ withFuseArgs prog args f = do
 
 -- memo: a replacement of withStructFuse
 withCFuseOperations
-  :: Exception e
+  :: forall fh e b
+   . Exception e
   => FuseOperations fh
   -> (e -> IO Errno)
   -> (Ptr C.FuseOperations -> IO b)
   -> IO b
 withCFuseOperations ops handler cont =
-  bracket (callocBytes (#size struct fuse_operations)) free $ \pOps -> do
-    -- TODO freeHaskellFunPtr to *every* mk functions
-    mkGetattr    wrapGetattr    >>= (#poke struct fuse_operations, getattr)    pOps
-    mkReadlink   wrapReadlink   >>= (#poke struct fuse_operations, readlink)   pOps
-    mkMknod      wrapMknod      >>= (#poke struct fuse_operations, mknod)      pOps
-    mkMkdir      wrapMkdir      >>= (#poke struct fuse_operations, mkdir)      pOps
-    mkUnlink     wrapUnlink     >>= (#poke struct fuse_operations, unlink)     pOps
-    mkRmdir      wrapRmdir      >>= (#poke struct fuse_operations, rmdir)      pOps
-    mkSymlink    wrapSymlink    >>= (#poke struct fuse_operations, symlink)    pOps
-    mkRename     wrapRename     >>= (#poke struct fuse_operations, rename)     pOps
-    mkLink       wrapLink       >>= (#poke struct fuse_operations, link)       pOps
-    mkChmod      wrapChmod      >>= (#poke struct fuse_operations, chmod)      pOps
-    mkChown      wrapChown      >>= (#poke struct fuse_operations, chown)      pOps
-    mkTruncate   wrapTruncate   >>= (#poke struct fuse_operations, truncate)   pOps
-    mkOpen       wrapOpen       >>= (#poke struct fuse_operations, open)       pOps
-    mkRead       wrapRead       >>= (#poke struct fuse_operations, read)       pOps
-    mkWrite      wrapWrite      >>= (#poke struct fuse_operations, write)      pOps
-    mkStatfs     wrapStatfs     >>= (#poke struct fuse_operations, statfs)     pOps
-    mkFlush      wrapFlush      >>= (#poke struct fuse_operations, flush)      pOps
-    mkRelease    wrapRelease    >>= (#poke struct fuse_operations, release)    pOps
-    mkFsync      wrapFsync      >>= (#poke struct fuse_operations, fsync)      pOps
-    mkOpendir    wrapOpendir    >>= (#poke struct fuse_operations, opendir)    pOps
-    mkReaddir    wrapReaddir    >>= (#poke struct fuse_operations, readdir)    pOps
-    mkReleasedir wrapReleasedir >>= (#poke struct fuse_operations, releasedir) pOps
-    mkFsyncdir   wrapFsyncdir   >>= (#poke struct fuse_operations, fsyncdir)   pOps
-    mkInit       wrapInit       >>= (#poke struct fuse_operations, init)       pOps
-    mkDestroy    wrapDestroy    >>= (#poke struct fuse_operations, destroy)    pOps
-    mkAccess     wrapAccess     >>= (#poke struct fuse_operations, access)     pOps
+  bracket (callocBytes (#size struct fuse_operations)) free $ \pOps ->
+    withC mkGetattr    wrapGetattr    (fuseGetattr ops)    $ (#poke struct fuse_operations, getattr) pOps >=> \_ ->
+    withC mkReadlink   wrapReadlink   (fuseReadlink ops)   $ (#poke struct fuse_operations, readlink) pOps >=> \_ ->
+    withC mkMknod      wrapMknod      (fuseMknod ops)      $ (#poke struct fuse_operations, mknod) pOps >=> \_ ->
+    withC mkMkdir      wrapMkdir      (fuseMkdir ops)      $ (#poke struct fuse_operations, mkdir) pOps >=> \_ ->
+    withC mkUnlink     wrapUnlink     (fuseUnlink ops)     $ (#poke struct fuse_operations, unlink) pOps >=> \_ ->
+    withC mkRmdir      wrapRmdir      (fuseRmdir ops)      $ (#poke struct fuse_operations, rmdir) pOps >=> \_ ->
+    withC mkSymlink    wrapSymlink    (fuseSymlink ops)    $ (#poke struct fuse_operations, symlink) pOps >=> \_ ->
+    withC mkRename     wrapRename     (fuseRename ops)     $ (#poke struct fuse_operations, rename) pOps >=> \_ ->
+    withC mkLink       wrapLink       (fuseLink ops)       $ (#poke struct fuse_operations, link) pOps >=> \_ ->
+    withC mkChmod      wrapChmod      (fuseChmod ops)      $ (#poke struct fuse_operations, chmod) pOps >=> \_ ->
+    withC mkChown      wrapChown      (fuseChown ops)      $ (#poke struct fuse_operations, chown) pOps >=> \_ ->
+    withC mkTruncate   wrapTruncate   (fuseTruncate ops)   $ (#poke struct fuse_operations, truncate) pOps >=> \_ ->
+    withC mkOpen       wrapOpen       (fuseOpen ops)       $ (#poke struct fuse_operations, open) pOps >=> \_ ->
+    withC mkRead       wrapRead       (fuseRead ops)       $ (#poke struct fuse_operations, read) pOps >=> \_ ->
+    withC mkWrite      wrapWrite      (fuseWrite ops)      $ (#poke struct fuse_operations, write) pOps >=> \_ ->
+    withC mkStatfs     wrapStatfs     (fuseStatfs ops)     $ (#poke struct fuse_operations, statfs) pOps >=> \_ ->
+    withC mkFlush      wrapFlush      (fuseFlush ops)      $ (#poke struct fuse_operations, flush) pOps >=> \_ ->
+    withC mkRelease    wrapRelease    (fuseRelease ops)    $ (#poke struct fuse_operations, release) pOps >=> \_ ->
+    withC mkFsync      wrapFsync      (fuseFsync ops)      $ (#poke struct fuse_operations, fsync) pOps >=> \_ ->
+    withC mkOpendir    wrapOpendir    (fuseOpendir ops)    $ (#poke struct fuse_operations, opendir) pOps >=> \_ ->
+    withC mkReaddir    wrapReaddir    (fuseReaddir ops)    $ (#poke struct fuse_operations, readdir) pOps >=> \_ ->
+    withC mkReleasedir wrapReleasedir (fuseReleasedir ops) $ (#poke struct fuse_operations, releasedir) pOps >=> \_ ->
+    withC mkFsyncdir   wrapFsyncdir   (fuseFsyncdir ops)   $ (#poke struct fuse_operations, fsyncdir) pOps >=> \_ ->
+    withC mkInit       wrapInit       (fuseInit ops)       $ (#poke struct fuse_operations, init) pOps >=> \_ ->
+    withC mkDestroy    wrapDestroy    (fuseDestroy ops)    $ (#poke struct fuse_operations, destroy) pOps >=> \_ ->
+    withC mkAccess     wrapAccess     (fuseAccess ops)     $ (#poke struct fuse_operations, access) pOps >=> \_ ->
     cont pOps
   where
+  -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and loan it to a continuation
+  withC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> (FunPtr cfunc -> IO c) -> IO c
+  withC mkMeth wrapMeth = maybeWithFun (withHaskellFunPtr mkMeth . wrapMeth)
+
   -- return negated errno as specified by fuse.h. also handle any Haskell exceptions
   handleAsFuseError :: IO Errno -> IO CInt
   handleAsFuseError = handleAsFuseErrorResult . fmap Left -- assumes eOK == 0
@@ -418,20 +423,20 @@ withCFuseOperations ops handler cont =
   handleAsFuseErrorResult :: IO (Either Errno CInt) -> IO CInt
   handleAsFuseErrorResult = fmap (either (negate . unErrno) id) . handle (fmap Left . handler)
 
-  wrapGetattr :: CGetattr
-  wrapGetattr pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
+  wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> CGetattr
+  wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
-    (fuseGetFileStat ops) filePath mfh >>= \case
+    go filePath mfh >>= \case
       Left errno -> pure errno
       Right stat -> do
         poke pStat stat
         pure eOK
 
-  wrapReadlink :: CReadlink
-  wrapReadlink pFilePath pBuf bufSize = handleAsFuseError $ do
+  wrapReadlink :: (FilePath -> IO (Either Errno FilePath)) -> CReadlink
+  wrapReadlink go pFilePath pBuf bufSize = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseReadSymbolicLink ops) filePath >>= \case
+    go filePath >>= \case
       Left errno -> pure errno
       Right target -> do
         -- This will truncate target if it's longer than the buffer can hold,
@@ -439,65 +444,65 @@ withCFuseOperations ops handler cont =
         pokeCStringLen0 (pBuf, (fromIntegral bufSize)) target
         pure eOK
 
-  wrapMknod :: CMknod
-  wrapMknod pFilePath mode dev = handleAsFuseError $ do
+  wrapMknod :: (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno) -> CMknod
+  wrapMknod go pFilePath mode dev = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseCreateDevice ops) filePath (fileModeToEntryType mode) mode dev
+    go filePath (fileModeToEntryType mode) mode dev
 
-  wrapMkdir :: CMkdir
-  wrapMkdir pFilePath mode = handleAsFuseError $ do
+  wrapMkdir :: (FilePath -> FileMode -> IO Errno) -> CMkdir
+  wrapMkdir go pFilePath mode = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseCreateDirectory ops) filePath mode
+    go filePath mode
 
-  wrapUnlink :: CUnlink
-  wrapUnlink pFilePath = handleAsFuseError $ do
+  wrapUnlink :: (FilePath -> IO Errno) -> CUnlink
+  wrapUnlink go pFilePath = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseRemoveLink ops) filePath
+    go filePath
 
-  wrapRmdir :: CRmdir
-  wrapRmdir pFilePath = handleAsFuseError $ do
+  wrapRmdir :: (FilePath -> IO Errno) -> CRmdir
+  wrapRmdir go pFilePath = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseRemoveDirectory ops) filePath
+    go filePath
 
-  wrapSymlink :: CSymlink
-  wrapSymlink pSource pDestination = handleAsFuseError $ do
+  wrapSymlink :: (FilePath -> FilePath -> IO Errno) -> CSymlink
+  wrapSymlink go pSource pDestination = handleAsFuseError $ do
     source <- peekCString pSource
     destination <- peekCString pDestination
-    (fuseCreateSymbolicLink ops) source destination
+    go source destination
 
-  wrapRename :: CRename
-  wrapRename pOld pNew _flags = handleAsFuseError $ do
+  wrapRename :: (FilePath -> FilePath -> IO Errno) -> CRename
+  wrapRename go pOld pNew _flags = handleAsFuseError $ do
     -- we ignore the rename flags because #define _GNU_SOURCE is needed to use the constants
     old <- peekCString pOld
     new <- peekCString pNew
-    (fuseRename ops) old new
+    go old new
 
-  wrapLink :: CLink
-  wrapLink pSource pDestination = handleAsFuseError $ do
+  wrapLink :: (FilePath -> FilePath -> IO Errno) -> CLink
+  wrapLink go pSource pDestination = handleAsFuseError $ do
     source <- peekCString pSource
     destination <- peekCString pDestination
-    (fuseCreateLink ops) source destination
+    go source destination
 
-  wrapChmod :: CChmod
-  wrapChmod pFilePath mode pFuseFileInfo = handleAsFuseError $ do
+  wrapChmod :: (FilePath -> Maybe fh -> FileMode -> IO Errno) -> CChmod
+  wrapChmod go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
-    (fuseSetFileMode ops) filePath mfh mode
+    go filePath mfh mode
 
-  wrapChown :: CChown
-  wrapChown pFilePath uid gid pFuseFileInfo = handleAsFuseError $ do
+  wrapChown :: (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno) -> CChown
+  wrapChown go pFilePath uid gid pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
-    (fuseSetOwnerAndGroup ops) filePath mfh uid gid
+    go filePath mfh uid gid
 
-  wrapTruncate :: CTruncate
-  wrapTruncate pFilePath off pFuseFileInfo = handleAsFuseError $ do
+  wrapTruncate :: (FilePath -> Maybe fh -> FileOffset -> IO Errno) -> CTruncate
+  wrapTruncate go pFilePath off pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
-    (fuseSetFileSize ops) filePath mfh off
+    go filePath mfh off
 
-  wrapOpen :: COpen
-  wrapOpen pFilePath pFuseFileInfo = handleAsFuseError $ do
+  wrapOpen :: (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)) -> COpen
+  wrapOpen go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
     let openFileFlags = OpenFileFlags
@@ -511,71 +516,71 @@ withCFuseOperations ops handler cont =
           | testBitSet flags (#const O_RDWR)   = ReadWrite
           | testBitSet flags (#const O_WRONLY) = WriteOnly
           | otherwise = ReadOnly -- O_RDONLY
-    (fuseOpen ops) filePath openMode openFileFlags >>= \case
+    go filePath openMode openFileFlags >>= \case
       Left errno -> pure errno
       Right fh -> do
         newFH pFuseFileInfo fh
         pure eOK
 
-  wrapRead :: CRead
-  wrapRead pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
+  wrapRead :: (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)) -> CRead
+  wrapRead go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseRead ops) filePath fh bufSize off >>= \case
+    go filePath fh bufSize off >>= \case
       Left errno -> pure $ Left errno
       Right bytes -> BU.unsafeUseAsCStringLen bytes $ \(pBytes, bytesLen) -> do
         let len = bytesLen `min` fromIntegral bufSize
         copyArray pBuf pBytes len
         pure $ Right $ fromIntegral len
 
-  wrapWrite :: CWrite
-  wrapWrite pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
+  wrapWrite :: (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt)) -> CWrite
+  wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
     buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
-    (fuseWrite ops) filePath fh buf off
+    go filePath fh buf off
 
-  wrapStatfs :: CStatfs
-  wrapStatfs pStr pStatVFS = handleAsFuseError $ do
+  wrapStatfs :: (String -> IO (Either Errno FileSystemStats)) -> CStatfs
+  wrapStatfs go pStr pStatVFS = handleAsFuseError $ do
     str <- peekCString pStr
-    (fuseGetFileSystemStats ops) str >>= \case
+    go str >>= \case
       Left errno -> pure errno
       Right statvfs -> do
         poke pStatVFS statvfs
         pure eOK
 
-  wrapFlush :: CFlush
-  wrapFlush pFilePath pFuseFileInfo = handleAsFuseError $ do
+  wrapFlush :: (FilePath -> fh -> IO Errno) -> CFlush
+  wrapFlush go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseFlush ops) filePath fh
+    go filePath fh
 
-  wrapRelease :: CRelease
-  wrapRelease pFilePath pFuseFileInfo = go `finally` delFH pFuseFileInfo
+  wrapRelease :: (FilePath -> fh -> IO ()) -> CRelease
+  wrapRelease go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
-    go = handleAsFuseError $ do
+    go' = handleAsFuseError $ do
       filePath <- peekCString pFilePath
       fh <- getFH pFuseFileInfo
-      (fuseRelease ops) filePath fh
+      go filePath fh
       pure eOK
 
-  wrapFsync :: CFsync
-  wrapFsync pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
+  wrapFsync :: (FilePath -> fh -> SyncType -> IO Errno) -> CFsync
+  wrapFsync go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseSynchronizeFile ops) filePath fh (if isDataSync /= 0 then DataSync else FullSync)
+    go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
-  wrapOpendir :: COpendir
-  wrapOpendir pFilePath pFuseFileInfo = handleAsFuseError $ do
+  wrapOpendir :: (FilePath -> IO (Either Errno fh)) -> COpendir
+  wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseOpenDirectory ops) filePath >>= \case
+    go filePath >>= \case
       Left errno -> pure errno
       Right fh -> do
         newFH pFuseFileInfo fh
         pure eOK
 
-  wrapReaddir :: CReaddir
-  wrapReaddir pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
+  wrapReaddir :: (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])) -> CReaddir
+  wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
     let fillDir = mkFillDir pFillDir
@@ -585,41 +590,41 @@ withCFuseOperations ops handler cont =
           with fileStat $ \pFileStat -> do
             _ <- fillDir pBuf pFileName pFileStat 0 0
             pure ()
-    (fuseReadDirectory ops) filePath fh >>= \case
+    go filePath fh >>= \case
       Left errno -> pure errno
       Right entries -> do
         traverse_ fillEntry entries
         pure eOK
 
-  wrapReleasedir :: CReleasedir
-  wrapReleasedir pFilePath pFuseFileInfo = go `finally` delFH pFuseFileInfo
+  wrapReleasedir :: (FilePath -> fh -> IO Errno) -> CReleasedir
+  wrapReleasedir go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
-    go = handleAsFuseError $ do
+    go' = handleAsFuseError $ do
       filePath <- peekCString pFilePath
       fh <- getFH pFuseFileInfo
-      (fuseReleaseDirectory ops) filePath fh
+      go filePath fh
 
-  wrapFsyncdir :: CFsyncdir
-  wrapFsyncdir pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
+  wrapFsyncdir :: (FilePath -> fh -> SyncType -> IO Errno) -> CFsyncdir
+  wrapFsyncdir go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekCString pFilePath
     fh <- getFH pFuseFileInfo
-    (fuseSynchronizeDirectory ops) filePath fh (if isDataSync /= 0 then DataSync else FullSync)
+    go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
-  wrapInit :: CInit
+  wrapInit :: IO () -> CInit
   -- TODO HFuse used `defaultExceptionHandler` instead of handler
   -- TODO use parameters
-  wrapInit _fuseConnInfo _fuseConfig = do
-    _ <- handle (void . handler) (fuseInit ops)
+  wrapInit go _fuseConnInfo _fuseConfig = do
+    _ <- handle (void . handler) go
     pure nullPtr
 
-  wrapDestroy :: CDestroy
+  wrapDestroy :: IO () -> CDestroy
   -- TODO HFuse used `defaultExceptionHandler` instead of handler
-  wrapDestroy _privateData = handle (void . handler) (fuseDestroy ops)
+  wrapDestroy go _privateData = handle (void . handler) go
 
-  wrapAccess :: CAccess
-  wrapAccess pFilePath mode = handleAsFuseError $ do
+  wrapAccess :: (FilePath -> AccessMode -> IO Errno) -> CAccess
+  wrapAccess go pFilePath mode = handleAsFuseError $ do
     filePath <- peekCString pFilePath
-    (fuseAccess ops) filePath accessMode
+    go filePath accessMode
     where
     accessMode
       | testBitSet mode (#const F_OK) = FileOK
@@ -797,6 +802,14 @@ pokeCStringLen0 (pBuf, bufSize) src =
 
 unErrno :: Errno -> CInt
 unErrno (Errno errno) = errno
+
+-- | `maybeWith` applied to `FunPtr`.
+maybeWithFun :: (a -> (FunPtr b -> IO c) -> IO c) -> Maybe a -> (FunPtr b -> IO c) -> IO c
+maybeWithFun = maybe ($ nullFunPtr)
+
+-- | Automatically releases a @foreign import ccall "wrapper"@ with `freeHaskellFunPtr`.
+withHaskellFunPtr :: (fun -> IO (FunPtr fun)) -> fun -> (FunPtr fun -> IO c) -> IO c
+withHaskellFunPtr wrapper fun = bracket (wrapper fun) freeHaskellFunPtr
 
 -- TODO move to another module?
 -- Get filehandle
