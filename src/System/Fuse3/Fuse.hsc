@@ -68,7 +68,7 @@ import Foreign
 import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), Errno(Errno), eOK, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
-import System.Exit (ExitCode(ExitSuccess), exitFailure, exitWith)
+import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
 import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
@@ -687,7 +687,7 @@ daemon io = do
     withFile "/dev/null" ReadMode $ \devNullIn -> do
       hDuplicateTo devNullIn stdin
     _ <- io
-    exitWith ExitSuccess
+    exitSuccess
 
 -- Installs signal handlers for the duration of the main loop.
 withSignalHandlers :: IO () -> IO a -> IO a
@@ -730,7 +730,7 @@ fuseMainReal = \foreground pFuse mountPt ->
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt pFuse
       if retVal == 1
-        then exitWith ExitSuccess
+        then exitSuccess
         else exitFailure
 
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO ()
