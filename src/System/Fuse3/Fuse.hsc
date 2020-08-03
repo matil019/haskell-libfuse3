@@ -727,9 +727,10 @@ fuseMainReal = \foreground pFuse mountPt ->
     -- with the multithreaded fuse loop. In the single-threaded case, FUSE
     -- depends on their recv() call to finish with EINTR when signals arrive.
     -- This doesn't happen with GHC's signal handling in place.
+    -- TODO confirm this
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt pFuse
-      if retVal == 1
+      if retVal == 0
         then exitSuccess
         else exitFailure
 
