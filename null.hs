@@ -2,17 +2,21 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Main where
 
+import Control.Exception (SomeException)
 import Data.ByteString (ByteString)
 import Data.List (foldl')
-import Foreign.C (Errno, eNOENT, eOK)
+import Foreign.C (CInt, Errno, eIO, eNOENT, eOK)
 import FileStat (FileStat(FileStat))
 import System.Clock (Clock(Realtime), getTime)
+import System.Fuse3.Fuse (defaultFuseOps, fuseMain)
+import System.IO (hPrint, stderr)
 import System.Posix.Files (groupReadMode, otherReadMode, ownerReadMode, ownerWriteMode, regularFileMode, unionFileModes)
 import System.Posix.User (getRealGroupID, getRealUserID)
 import System.Posix.Types (ByteCount, FileOffset)
 
 import qualified Data.ByteString as B
 import qualified FileStat
+import qualified System.Fuse3.Fuse as Fuse
 
 nullGetattr :: FilePath -> IO (Either Errno FileStat)
 nullGetattr "/" = do
@@ -37,9 +41,9 @@ nullTruncate :: FilePath -> FileOffset -> IO Errno
 nullTruncate "/" _ = pure eOK
 nullTruncate _   _ = pure eNOENT
 
-nullOpen :: FilePath -> IO Errno
-nullOpen "/" = pure eOK
-nullOpen _   = pure eNOENT
+nullOpen :: FilePath -> IO (Either Errno ())
+nullOpen "/" = pure $ Right ()
+nullOpen _   = pure $ Left eNOENT
 
 nullRead :: FilePath -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
 nullRead "/" size offset
@@ -47,9 +51,17 @@ nullRead "/" size offset
   | otherwise = pure $ Right $ B.replicate (fromIntegral size) 0
 nullRead _ _ _ = pure $ Left eNOENT
 
-nullWrite :: FilePath -> ByteString -> ByteCount -> FileOffset -> IO (Either Errno Int)
-nullWrite "/" _ size _ = pure $ Right $ fromIntegral size
-nullWrite _   _ _    _ = pure $ Left eNOENT
+nullWrite :: FilePath -> ByteString -> FileOffset -> IO (Either Errno CInt)
+nullWrite "/" buf _ = pure $ Right $ fromIntegral $ B.length buf
+nullWrite _   _   _ = pure $ Left eNOENT
 
 main :: IO ()
-main = pure ()
+main = fuseMain ops (\e -> hPrint stderr (e :: SomeException) >> pure eIO)
+  where
+  ops = defaultFuseOps
+    { Fuse.fuseGetFileStat = \fp _ -> nullGetattr fp
+    , Fuse.fuseSetFileSize = \fp _ off -> nullTruncate fp off
+    , Fuse.fuseOpen = \fp _ _ -> nullOpen fp
+    , Fuse.fuseRead = \fp _ sz off -> nullRead fp sz off
+    , Fuse.fuseWrite = \fp _ buf off -> nullWrite fp buf off
+    }
