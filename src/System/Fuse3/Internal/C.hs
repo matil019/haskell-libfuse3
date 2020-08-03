@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | C land.
 --
 -- Exported C called from Haskell
@@ -61,9 +62,5 @@ foreign import ccall safe "fuse_destroy"
 foreign import ccall safe "fuse_opt_free_args"
   fuse_opt_free_args :: Ptr FuseArgs -> IO ()
 
-foreign import ccall safe "fuse_loop_mt"
-  fuse_loop_mt :: Ptr StructFuse -> IO Int
-  -- TODO this function does not exist in the source??? but objdump -T /usr/lib/libfuse3.so.3.9.2 tells me otherwise
-  -- Instead, use this?
-  -- fuse_loop_mt_31 :: Ptr StructFuse -> CInt -> IO CInt
-  -- the caveats may no longer apply; consider fuse_loop and fuse_session_loop
+foreign import ccall safe "fuse_loop_mt_31"
+  fuse_loop_mt_31 :: Ptr StructFuse -> CInt -> IO Int

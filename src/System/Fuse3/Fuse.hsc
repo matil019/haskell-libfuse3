@@ -729,7 +729,7 @@ fuseMainReal = \foreground pFuse mountPt ->
     -- This doesn't happen with GHC's signal handling in place.
     -- TODO confirm this
     withSignalHandlers (C.fuse_session_exit session) $ do
-      retVal <- C.fuse_loop_mt pFuse
+      retVal <- C.fuse_loop_mt_31 pFuse 0 -- this 0 is @clone_fd@ argument TODO allow configuring this?
       if retVal == 0
         then exitSuccess
         else exitFailure
