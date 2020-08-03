@@ -20,22 +20,49 @@ import System.Posix.Types
 
 import qualified Foreign
 
--- Ptr FileStat === Ptr CStat
+-- | A file status a.k.a. metadata.
+--
+-- The differences from `System.Posix.Files.FileStatus` are:
+--
+--   - Is a record type with a `Storable` instance.
+--
+--   - Has an extra field `blockCount`.
+--
+--   - Provides an exact representation (`TimeSpec`) of the time fields without converting to `Date.Time.Clock.POSIX.POSIXTime`.
+--
+--       - This assumes that the @struct stat@ has @st_atim@, @st_mtim@ and @st_ctim@ fields.
+--         On Linux this requires Linux >= 2.6.
+--
+-- @Ptr FileStat@ can be cast to @Ptr `System.Posix.Internals.CStat`@ and vice versa.
+--
+-- The @st_dev@ and @st_blksize@ fields are ignored. The @st_ino@ field is ignored unless the
+-- @use_ino@ mount option is given. TODO add support for it
 data FileStat = FileStat
-  { fileMode :: FileMode -- st_mode
-  , linkCount :: LinkCount -- st_nlink
-  , fileOwner :: UserID -- st_uid
-  , fileGroup :: GroupID -- st_gid
-  , specialDeviceID :: DeviceID -- st_rdev TODO what for non-device file?
-  , fileSize :: FileOffset -- st_size
-  , blockCount :: CBlkSize -- st_blocks  see also: https://github.com/haskell/unix/pull/78/files
+  { -- | File type and mode. @st_mode@
+    fileMode :: FileMode
+  , -- | Number of hard links. @st_nlink@
+    linkCount :: LinkCount
+  , -- | User ID of owner. @st_uid@
+    fileOwner :: UserID
+  , -- | Group ID of owner. @st_gid@
+    fileGroup :: GroupID
+  , -- | Device ID (if special file). @st_rdev@
+    specialDeviceID :: DeviceID
+  , -- | Total size, in bytes. @st_size@
+    fileSize :: FileOffset
+  , -- | Number of 512B blocks allocated. @st_blocks@
+    blockCount :: CBlkSize -- see also: https://github.com/haskell/unix/pull/78/files
   -- these assumes Linux >= 2.6
-  , accessTimeHiRes :: TimeSpec -- st_atim
-  , modificationTimeHiRes :: TimeSpec -- st_mtim
-  , statusChangeTimeHiRes :: TimeSpec -- st_ctim
+  , -- | Time of last access. @st_atim@
+    accessTimeHiRes :: TimeSpec
+  , -- | Time of last modification. @st_mtim@
+    modificationTimeHiRes :: TimeSpec
+  , -- | Time of last status change. @st_ctim@
+    statusChangeTimeHiRes :: TimeSpec
   }
   deriving (Eq, Show)
 
+-- | Targets @struct stat@.
 instance Storable FileStat where
   sizeOf _ = #size struct stat
 
