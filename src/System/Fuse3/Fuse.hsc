@@ -760,7 +760,7 @@ fuseRun prog args ops handler =
             Just (Just mountPt, _, foreground) ->
               withCFuseOperations ops handler $ \pOp -> do
                 let opSize = (#size struct fuse_operations)
-                    privData = _later
+                    privData = nullPtr
                 -- TODO fuse_new returns nullPtr on failure
                 -- but it's unlikely because fuseParseCommandLine already succeeded at this point
                 -- TODO dispose pFuse? (@fuse_destroy@)
