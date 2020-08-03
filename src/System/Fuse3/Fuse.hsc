@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-| Based on `System.Fuse` in the package "HFuse-0.2.5.0".
 
+TODO move to LICENSE
+
 Below is the @LICENSE@ of "HFuse":
 
 Copyright (c) Jérémy Bobbio
@@ -109,6 +111,7 @@ entryTypeToFileMode RegularFile      = regularFileMode
 entryTypeToFileMode SymbolicLink     = symbolicLinkMode
 entryTypeToFileMode Socket           = socketMode
 
+-- | Decodes `EntryType` from a `FileMode`.
 fileModeToEntryType :: FileMode -> EntryType
 fileModeToEntryType mode
   | fileType == namedPipeMode        = NamedPipe
@@ -122,28 +125,41 @@ fileModeToEntryType mode
   where
   fileType = mode .&. (#const S_IFMT)
 
--- | Passed to 'fuseSynchronizeFile' and 'fuseSynchronizeDirectory'.
+-- | Passed to `fuseFsync` and `fuseFsyncdir`.
 data SyncType
-  -- | Synchronize all in-core parts of a file to disk: file content and metadata.
+  -- | Synchronize both file content and metadata.
   = FullSync
   -- | Synchronize only the file content.
   | DataSync
   deriving (Eq, Show)
 
 -- | The query type of @access@. Passed to `fuseAccess`.
---
---   [@FileOK@] File existence (@F_OK@)
---
---   [@PermOK@] Reading, writing and executing permissions (@R_OK@, @W_OK@ and @X_OK@, resp.)
-data AccessMode = FileOK | PermOK Bool Bool Bool
+data AccessMode
+  -- | File existence (@F_OK@)
+  = FileOK
+  -- | Reading, writing and executing permissions (@R_OK@, @W_OK@ and @X_OK@, resp.)
+  | PermOK Bool Bool Bool
   deriving (Eq, Show)
 
 -- TODO move to another module?
+-- | @testBitSet bits mask@ is @True@ iff all bits in @mask@ are set in @bits@.
+--
+-- @
+-- testBitSet bits mask ≡ bits .&. mask == mask
+-- @
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
 
 -- TODO add low-level FuseOperations whose members are @FunPtr foo@
 -- memo: when adding a new field, make sure to update withCFuseOperations
+-- | The file system operations.
+--
+-- Each field is named against @struct fuse_operations@ in @fuse.h@.
+--
+-- @fh@ is the file handle type returned by `fuseOpen` and `fuseOpendir`, and
+-- subsequently passed to all other file operations.
+--
+-- TODO distinguish file handle and directory handle? (with Either?)
 data FuseOperations fh = FuseOperations
   { -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
     --
@@ -158,8 +174,7 @@ data FuseOperations fh = FuseOperations
 
   , -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
     --
-    -- This function will also be called for regular file creation if 'fuseCreate' (TODO
-    -- name pending) is not defined.
+    -- This function will also be called for regular file creation if `fuseCreate` is not defined.
     fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
 
   , -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
@@ -271,7 +286,7 @@ data FuseOperations fh = FuseOperations
   , -- | Implements @closedir(3)@.
     fuseReleasedir :: Maybe (FilePath -> fh -> IO Errno)
 
-  , -- | Synchronize the directory's contents; analogous to 'fuseSynchronizeFile'.
+  , -- | Synchronize the directory's contents; analogous to `fuseFsync`.
     fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
   , -- | Initializes the filesystem.  This is called before all other operations.
@@ -305,7 +320,7 @@ data FuseOperations fh = FuseOperations
     -- TODO , lseek :: _
   }
 
--- | Empty \/ default versions of the FUSE operations.
+-- | An empty set of operations whose fields are @Nothing@.
 defaultFuseOps :: FuseOperations fh
 defaultFuseOps = FuseOperations
   { fuseGetattr = Nothing
@@ -336,27 +351,31 @@ defaultFuseOps = FuseOperations
   , fuseAccess = Nothing
   }
 
--- Allocates a fuse_args struct to hold the commandline arguments.
+-- | Allocates a @fuse_args@ struct to hold commandline arguments.
 withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
-withFuseArgs prog args f = do
+withFuseArgs prog args f =
   let allArgs = (prog:args)
       argc = length allArgs
+  in
   withMany withCString allArgs $ \cArgs ->
-    withArray cArgs $ \pArgv ->
-      -- TODO call FUSE_ARGS_INIT instead?
-      allocaBytes (#size struct fuse_args) $ \fuseArgs -> do
-        (#poke struct fuse_args, argc) fuseArgs argc
-        (#poke struct fuse_args, argv) fuseArgs pArgv
-        (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
-        f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
+  withArray cArgs $ \pArgv ->
+  -- TODO call FUSE_ARGS_INIT instead?
+  allocaBytes (#size struct fuse_args) $ \fuseArgs -> do
+    (#poke struct fuse_args, argc) fuseArgs argc
+    (#poke struct fuse_args, argv) fuseArgs pArgv
+    (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
+    f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
 
--- memo: a replacement of withStructFuse
+-- | Allocates a @fuse_operations@ struct and pokes `FuseOperations` into it.
+--
+-- Each field of `FuseOperations` is converted into a C function pointer and is assigned
+-- to a corresponding field of @struct fuse_operations@.
 withCFuseOperations
   :: forall fh e b
    . Exception e
-  => FuseOperations fh
-  -> (e -> IO Errno)
-  -> (Ptr C.FuseOperations -> IO b)
+  => FuseOperations fh              -- ^ A set of file system operations.
+  -> (e -> IO Errno)                -- ^ An error handler that converts a Haskell exception to @errno@.
+  -> (Ptr C.FuseOperations -> IO b) --
   -> IO b
 withCFuseOperations ops handler cont =
   bracket (callocBytes (#size struct fuse_operations)) free $ \pOps ->
@@ -610,10 +629,12 @@ withCFuseOperations ops handler cont =
           (testBitSet mode (#const W_OK))
           (testBitSet mode (#const X_OK))
 
--- Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
--- we care about. @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in
--- to remove those arguments; the `C.FuseArgs` struct containing remaining arguments
--- must be passed to @fuse_mount@/@fuse_new@.
+-- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
+-- we care about.
+--
+-- @fuse_parse_cmdline@ will modify the `C.FuseArgs` struct passed in to remove those
+-- arguments; the `C.FuseArgs` struct containing remaining arguments must be passed to
+-- @fuse_mount@/@fuse_new@.
 --
 -- The multithreaded runtime will be used regardless of the threading flag!
 -- See the comment in @fuse_session_exit@ for why.
@@ -639,15 +660,12 @@ fuseParseCommandLine pArgs =
         pure $ Just (mountPoint, multiThreaded, foreground)
       else pure Nothing
 
--- Haskell version of @daemon(2)@
+-- TODO or rather, @fuse_daemonize@?
+-- | Haskell version of @daemon(2)@
 --
 -- Mimics @daemon()@'s use of @_exit()@ instead of @exit()@; we depend on this in
 -- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground process exits.
 daemon :: IO a -> IO b
--- `exitImmediately` never returns. This `error` is only here to please the
--- typechecker.
--- It's a dirty hack, but I think the problem is in the posix package, not
--- making this @IO a@ instead of @IO ()@
 daemon io = do
   _ <- forkProcess (d `catchIOError` const exitFailure)
   exitImmediately ExitSuccess
@@ -666,7 +684,7 @@ daemon io = do
     _ <- io
     exitSuccess
 
--- Installs signal handlers for the duration of the main loop.
+-- | @withSignalHandlers handler io@ installs signal handlers while @io@ is executed.
 withSignalHandlers :: IO () -> IO a -> IO a
 withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
   where
@@ -682,7 +700,7 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
--- Mounts the filesystem, forks, and then starts fuse
+-- | Mounts the filesystem, forks, and then starts fuse.
 fuseMainReal
   :: Bool
   -> Ptr C.StructFuse
@@ -711,29 +729,30 @@ fuseMainReal = \foreground pFuse mountPt ->
         then exitSuccess
         else exitFailure
 
+-- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO ()
 fuseRun prog args ops handler =
   catchIOError
-    (withFuseArgs prog args $ \pArgs ->
-       do cmd <- fuseParseCommandLine pArgs
-          case cmd of
-            Nothing -> fail ""
-            Just (Nothing, _, _) -> fail "Usage error: mount point required"
-            Just (Just mountPt, _, foreground) ->
-              withCFuseOperations ops handler $ \pOp -> do
-                let opSize = (#size struct fuse_operations)
-                    privData = nullPtr
-                -- TODO fuse_new returns nullPtr on failure
-                -- but it's unlikely because fuseParseCommandLine already succeeded at this point
-                -- TODO dispose pFuse? (@fuse_destroy@)
-                pFuse <- C.fuse_new pArgs pOp opSize privData
-                fuseMainReal foreground pFuse mountPt)
+    (withFuseArgs prog args $ \pArgs -> do
+      cmd <- fuseParseCommandLine pArgs
+      case cmd of
+        Nothing -> fail ""
+        Just (Nothing, _, _) -> fail "Usage error: mount point required"
+        Just (Just mountPt, _, foreground) ->
+          withCFuseOperations ops handler $ \pOp -> do
+            let opSize = (#size struct fuse_operations)
+                privData = nullPtr
+            -- TODO fuse_new returns nullPtr on failure
+            -- but it's unlikely because fuseParseCommandLine already succeeded at this point
+            -- TODO dispose pFuse? (@fuse_destroy@)
+            pFuse <- C.fuse_new pArgs pOp opSize privData
+            fuseMainReal foreground pFuse mountPt)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
 --
 -- This is all that has to be called from the @main@ function. On top of
--- the `FuseOperations` record with filesystem implementation, you muset give
+-- the `FuseOperations` record with filesystem implementation, you must give
 -- an exception handler converting Haskell exceptions to `Errno`.
 --
 -- This function does the following:
@@ -765,11 +784,12 @@ fuseMain ops handler = do
   fuseRun prog args ops handler
 
 -- TODO move to another module
-pokeCStringLen :: CStringLen -> String -> IO ()
-pokeCStringLen (pBuf, bufSize) src =
-  withCStringLen src $ \(pSrc, srcSize) ->
-    copyArray pBuf pSrc (min bufSize srcSize)
-
+-- | Marshals a Haskell string into a NUL terminated C string in a locale-dependent way.
+--
+-- Does `withCStringLen` and copies it into the destination buffer.
+--
+-- If the destination buffer is not long enough to hold the source string, it is truncated and a
+-- NUL byte is appended at the end of the buffer.
 pokeCStringLen0 :: CStringLen -> String -> IO ()
 pokeCStringLen0 (pBuf, bufSize) src =
   withCStringLen src $ \(pSrc, srcSize) -> do
@@ -778,6 +798,7 @@ pokeCStringLen0 (pBuf, bufSize) src =
     copyArray pBuf pSrc (min bufSize0 srcSize)
     pokeElemOff pBuf (min bufSize0 srcSize) 0
 
+-- | Unwraps the newtype `Errno`.
 unErrno :: Errno -> CInt
 unErrno (Errno errno) = errno
 
@@ -790,17 +811,20 @@ withHaskellFunPtr :: (fun -> IO (FunPtr fun)) -> fun -> (FunPtr fun -> IO c) -> 
 withHaskellFunPtr wrapper fun = bracket (wrapper fun) freeHaskellFunPtr
 
 -- TODO move to another module?
--- Get filehandle
+-- | Gets a file handle from `C.FuseFileInfo` which is embedded with `newFH`.
 getFH :: Ptr C.FuseFileInfo -> IO fh
 getFH pFuseFileInfo = do
   sptr <- (#peek struct fuse_file_info, fh) pFuseFileInfo
   deRefStablePtr $ castPtrToStablePtr sptr
 
+-- | Embeds a file handle into `C.FuseFileInfo`. It should be freed with `delFH` when no longer
+-- required.
 newFH :: Ptr C.FuseFileInfo -> fh -> IO ()
 newFH pFuseFileInfo fh = do
   sptr <- newStablePtr fh
   (#poke struct fuse_file_info, fh) pFuseFileInfo $ castStablePtrToPtr sptr
 
+-- | Frees a file handle in `C.FuseFileInfo` which is embedded with `newFH`.
 delFH :: Ptr C.FuseFileInfo -> IO ()
 delFH pFuseFileInfo = do
   sptr <- (#peek struct fuse_file_info, fh) pFuseFileInfo

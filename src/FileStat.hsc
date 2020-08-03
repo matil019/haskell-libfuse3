@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+-- | @struct stat@ in Haskell.
 module FileStat where
 
 #include <sys/stat.h>

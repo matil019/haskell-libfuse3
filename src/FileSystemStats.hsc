@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+-- | @struct statvfs@ in Haskell.
 module FileSystemStats where
 
 #include <sys/statvfs.h>
@@ -8,10 +9,11 @@ import Foreign
 import Foreign.C
 import System.Posix.Types
 
--- | Type used by the 'fuseGetFileSystemStats'.
+-- | Passed to 'fuseGetFileSystemStats'.
 --
--- The 'Storable' instance targets C @struct statvfs@. @f_favail@, @f_fsid@ and @f_flag@
--- fields are ignored.
+-- The 'Storable' instance targets C @struct statvfs@.
+--
+-- @f_favail@, @f_fsid@ and @f_flag@ fields are ignored.
 data FileSystemStats = FileSystemStats
   { -- | Filesystem block size. @f_bsize@ TODO look up the FUSE default. (512?)
     blockSize :: CULong
