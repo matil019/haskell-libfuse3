@@ -41,8 +41,6 @@ import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad ((>=>), unless, void)
 import Data.Bits ((.&.), Bits)
 import Data.Foldable (traverse_)
-import FileStat (FileStat)
-import FileSystemStats (FileSystemStats)
 import Foreign
   ( FunPtr
   , Ptr
@@ -71,6 +69,8 @@ import Foreign.C (CInt(CInt), CSize(CSize), CString, CStringLen, CUInt(CUInt), E
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
+import System.Fuse3.FileStat (FileStat)
+import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
 import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)

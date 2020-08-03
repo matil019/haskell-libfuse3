@@ -4,9 +4,9 @@
 -- Exported C called from Haskell
 module System.Fuse3.Internal.C where
 
-import FileStat (FileStat)
 import Foreign (Ptr)
 import Foreign.C (CInt(CInt), CSize(CSize), CString)
+import System.Fuse3.FileStat (FileStat)
 import System.Posix.Types (COff)
 
 -- TODO check peek/poke on structs

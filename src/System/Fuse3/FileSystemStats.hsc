@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 -- | @struct statvfs@ in Haskell.
-module FileSystemStats where
+module System.Fuse3.FileSystemStats where
 
 #include <sys/statvfs.h>
 
@@ -59,3 +59,5 @@ instance Storable FileSystemStats where
     (#poke struct statvfs, f_files)   ptr fileCount
     (#poke struct statvfs, f_ffree)   ptr filesFree
     (#poke struct statvfs, f_namemax) ptr maxNameLength
+
+-- TODO equivalent of getFileStat

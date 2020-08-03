@@ -17,10 +17,9 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
 library
-  -- TODO organize module structure
-  exposed-modules:     FileStat
-                       FileSystemStats
-                       System.Fuse3
+  exposed-modules:     System.Fuse3
+                       System.Fuse3.FileStat
+                       System.Fuse3.FileSystemStats
                        System.Fuse3.Internal
                        System.Fuse3.Internal.C
   -- other-modules:

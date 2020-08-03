@@ -7,8 +7,13 @@ module System.Fuse3
   , entryTypeToFileMode
   , fileModeToEntryType
   , SyncType(..)
+  , FileStat(..)
+  , getFileStat
+  , FileSystemStats
   , fuseMain
   )
   where
 
+import System.Fuse3.FileStat
+import System.Fuse3.FileSystemStats
 import System.Fuse3.Internal
