@@ -4,9 +4,11 @@ module System.Fuse3.FileSystemStats where
 
 #include <sys/statvfs.h>
 
-import Foreign (Storable, peekByteOff, pokeByteOff)
-import Foreign.C (CULong)
-import System.Posix.Types (CFsBlkCnt, CFsFilCnt)
+import Foreign (Ptr, Storable, alloca, peek, peekByteOff, pokeByteOff)
+import Foreign.C (CInt(CInt), CString, CULong, throwErrnoIfMinus1Retry_)
+import System.Posix.Error (throwErrnoPathIfMinus1Retry_)
+import System.Posix.Internals (withFilePath)
+import System.Posix.Types (CFsBlkCnt, CFsFilCnt, Fd(Fd))
 
 import qualified Foreign
 
@@ -61,4 +63,29 @@ instance Storable FileSystemStats where
     (#poke struct statvfs, f_ffree)   ptr filesFree
     (#poke struct statvfs, f_namemax) ptr maxNameLength
 
--- TODO equivalent of getFileStat
+-- | Gets filesystem statistics.
+--
+-- Calls @statvfs@.
+getFileSystemStats
+  :: FilePath  -- ^ A path of any file within the filesystem
+  -> IO FileSystemStats
+getFileSystemStats path =
+  alloca $ \buf ->
+  withFilePath path $ \cpath -> do
+    throwErrnoPathIfMinus1Retry_ "getFileSystemStats" path (c_statvfs cpath buf)
+    peek buf
+
+-- | Gets filesystem statistics.
+--
+-- Calls @fstatvfs@.
+getFileSystemStatsFd :: Fd -> IO FileSystemStats
+getFileSystemStatsFd fd =
+  alloca $ \buf -> do
+    throwErrnoIfMinus1Retry_ "getFileSystemStatsFd" (c_fstatvfs fd buf)
+    peek buf
+
+foreign import ccall safe "fstatvfs"
+  c_fstatvfs :: Fd -> Ptr FileSystemStats -> IO CInt
+
+foreign import ccall safe "statvfs"
+  c_statvfs :: CString -> Ptr FileSystemStats -> IO CInt

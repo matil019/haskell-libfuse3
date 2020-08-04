@@ -5,12 +5,14 @@ module System.Fuse3.FileStat where
 #include <sys/stat.h>
 
 import Foreign (Storable, alloca, castPtr, peek, peekByteOff, pokeByteOff)
+import Foreign.C (throwErrnoIfMinus1Retry_)
 import System.Clock (TimeSpec)
 import System.Posix.Error (throwErrnoPathIfMinus1Retry_)
-import System.Posix.Internals (lstat, withFilePath)
+import System.Posix.Internals (c_fstat, lstat, withFilePath)
 import System.Posix.Types
   ( CBlkSize
   , DeviceID
+  , Fd(Fd)
   , FileOffset
   , FileMode
   , GroupID
@@ -102,3 +104,12 @@ getFileStat path =
     withFilePath path $ \cpath -> do
       throwErrnoPathIfMinus1Retry_ "getFileStat" path (lstat cpath (castPtr buf))
       peek buf
+
+-- | Reads a file status of a given file.
+--
+-- Calls @fstat@.
+getFileStatFd :: Fd -> IO FileStat
+getFileStatFd (Fd fd) =
+  alloca $ \buf -> do
+    throwErrnoIfMinus1Retry_ "getFileStatFd" (c_fstat fd (castPtr buf))
+    peek buf
