@@ -4,16 +4,23 @@
 -- Exported C called from Haskell
 module System.Fuse3.Internal.C where
 
-import Foreign (Ptr)
-import Foreign.C (CInt(CInt), CSize(CSize), CString)
+import Data.Word (Word64)
+import Foreign (FunPtr, Ptr)
+import Foreign.C (CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
+import System.Clock (TimeSpec)
 import System.Fuse3.FileStat (FileStat)
-import System.Posix.Types (COff)
+import System.Fuse3.FileSystemStats (FileSystemStats)
+import System.Posix.Types (CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CSsize(CSsize), CUid(CUid))
+
+import qualified System.Posix.Internals as Posix
 
 -- TODO check peek/poke on structs
 
 data FuseArgs -- struct fuse_args
 
 data FuseBuf -- struct fuse_buf
+
+data FuseBufvec -- struct fuse_bufvec
 
 data FuseCmdlineOpts -- struct fuse_cmdline_opts
 
@@ -30,7 +37,57 @@ data FuseFillDirBuf -- void
 
 type FuseFillDirFlags = CInt -- enum fuse_fill_dir_flags -- TODO give proper type??
 
-data FuseOperations -- struct fuse_operations
+-- | @struct fuse_operations@
+--
+-- All operations are optional. NULL indicates undefined operation.
+data FuseOperations = FuseOperations
+  { fuseGetattr       :: FunPtr CGetattr
+  , fuseReadlink      :: FunPtr CReadlink
+  , fuseMknod         :: FunPtr CMknod
+  , fuseMkdir         :: FunPtr CMkdir
+  , fuseUnlink        :: FunPtr CUnlink
+  , fuseRmdir         :: FunPtr CRmdir
+  , fuseSymlink       :: FunPtr CSymlink
+  , fuseRename        :: FunPtr CRename
+  , fuseLink          :: FunPtr CLink
+  , fuseChmod         :: FunPtr CChmod
+  , fuseChown         :: FunPtr CChown
+  , fuseTruncate      :: FunPtr CTruncate
+  , fuseOpen          :: FunPtr COpen
+  , fuseRead          :: FunPtr CRead
+  , fuseWrite         :: FunPtr CWrite
+  , fuseStatfs        :: FunPtr CStatfs
+  , fuseFlush         :: FunPtr CFlush
+  , fuseRelease       :: FunPtr CRelease
+  , fuseFsync         :: FunPtr CFsync
+  , fuseSetxattr      :: FunPtr CSetxattr
+  , fuseGetxattr      :: FunPtr CGetxattr
+  , fuseListxattr     :: FunPtr CListxattr
+  , fuseRemovexattr   :: FunPtr CRemovexattr
+  , fuseOpendir       :: FunPtr COpendir
+  , fuseReaddir       :: FunPtr CReaddir
+  , fuseReleasedir    :: FunPtr CReleasedir
+  , fuseFsyncdir      :: FunPtr CFsyncdir
+  , fuseInit          :: FunPtr CInit
+  , fuseDestroy       :: FunPtr CDestroy
+  , fuseAccess        :: FunPtr CAccess
+  , fuseCreate        :: FunPtr CCreate
+  , fuseLock          :: FunPtr CLock
+  , fuseUtimens       :: FunPtr CUtimens
+  , fuseBmap          :: FunPtr CBmap
+  , fuseIoctl         :: FunPtr CIoctl
+  , fusePoll          :: FunPtr CPoll
+  , fuseWriteBuf      :: FunPtr CWriteBuf
+  , fuseReadBuf       :: FunPtr CReadBuf
+  , fuseFlock         :: FunPtr CFlock
+  , fuseFallocate     :: FunPtr CFallocate
+  , fuseCopyFileRange :: FunPtr CCopyFileRange
+  , fuseLseek         :: FunPtr CLseek
+  }
+
+-- TODO instance Storable FuseOperations where
+
+data FusePollhandle -- struct fuse_pollhandle
 
 type FuseReaddirFlags = CInt -- enum fuse_readdir_flags -- TODO give proper type??
 
@@ -64,3 +121,175 @@ foreign import ccall safe "fuse_opt_free_args"
 
 foreign import ccall safe "fuse_loop_mt_31"
   fuse_loop_mt_31 :: Ptr StructFuse -> CInt -> IO Int
+
+-- TODO move to another module (along with withCFuseOperations?)
+type CGetattr = CString -> Ptr FileStat -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkGetattr :: CGetattr -> IO (FunPtr CGetattr)
+
+type CReadlink = CString -> CString -> CSize -> IO CInt
+foreign import ccall "wrapper"
+  mkReadlink :: CReadlink -> IO (FunPtr CReadlink)
+
+type CMknod = CString -> CMode -> CDev -> IO CInt
+foreign import ccall "wrapper"
+  mkMknod :: CMknod -> IO (FunPtr CMknod)
+
+type CMkdir = CString -> CMode -> IO CInt
+foreign import ccall "wrapper"
+  mkMkdir :: CMkdir -> IO (FunPtr CMkdir)
+
+type CUnlink = CString -> IO CInt
+foreign import ccall "wrapper"
+  mkUnlink :: CUnlink -> IO (FunPtr CUnlink)
+
+type CRmdir = CString -> IO CInt
+foreign import ccall "wrapper"
+  mkRmdir :: CRmdir -> IO (FunPtr CRmdir)
+
+type CSymlink = CString -> CString -> IO CInt
+foreign import ccall "wrapper"
+  mkSymlink :: CSymlink -> IO (FunPtr CSymlink)
+
+type CRename = CString -> CString -> CUInt -> IO CInt
+foreign import ccall "wrapper"
+  mkRename :: CRename -> IO (FunPtr CRename)
+
+type CLink = CString -> CString -> IO CInt
+foreign import ccall "wrapper"
+  mkLink :: CLink -> IO (FunPtr CLink)
+
+type CChmod = CString -> CMode -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkChmod :: CChmod -> IO (FunPtr CChmod)
+
+type CChown = CString -> CUid -> CGid -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkChown :: CChown -> IO (FunPtr CChown)
+
+type CTruncate = CString -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkTruncate :: CTruncate -> IO (FunPtr CTruncate)
+
+type COpen = CString -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkOpen :: COpen -> IO (FunPtr COpen)
+
+type CRead = CString -> CString -> CSize -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkRead :: CRead -> IO (FunPtr CRead)
+
+type CWrite = CString -> CString -> CSize -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkWrite :: CWrite -> IO (FunPtr CWrite)
+
+type CStatfs = CString -> Ptr FileSystemStats -> IO CInt
+foreign import ccall "wrapper"
+  mkStatfs :: CStatfs -> IO (FunPtr CStatfs)
+
+type CFlush = CString -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkFlush :: CFlush -> IO (FunPtr CFlush)
+
+type CRelease = CString -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkRelease :: CRelease -> IO (FunPtr CRelease)
+
+type CFsync = CString -> CInt -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkFsync :: CFsync -> IO (FunPtr CFsync)
+
+type CSetxattr = CString -> CString -> CString -> CSize -> CInt -> IO CInt
+foreign import ccall "wrapper"
+  mkSetxattr :: CSetxattr -> IO (FunPtr CSetxattr)
+
+type CGetxattr = CString -> CString -> CString -> CSize -> IO CInt
+foreign import ccall "wrapper"
+  mkGetxattr :: CGetxattr -> IO (FunPtr CGetxattr)
+
+type CListxattr = CString -> CString -> CSize -> IO CInt
+foreign import ccall "wrapper"
+  mkListxattr :: CListxattr -> IO (FunPtr CListxattr)
+
+type CRemovexattr = CString -> CString -> IO CInt
+foreign import ccall "wrapper"
+  mkRemovexattr :: CRemovexattr -> IO (FunPtr CRemovexattr)
+
+type COpendir = CString -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkOpendir :: COpendir -> IO (FunPtr COpendir)
+
+type CReaddir = CString -> Ptr FuseFillDirBuf -> FunPtr FuseFillDir -> COff -> Ptr FuseFileInfo -> FuseReaddirFlags -> IO CInt
+foreign import ccall "wrapper"
+  mkReaddir :: CReaddir -> IO (FunPtr CReaddir)
+
+type CReleasedir = CString -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkReleasedir :: CReleasedir -> IO (FunPtr CReleasedir)
+
+type CFsyncdir = CString -> CInt -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkFsyncdir :: CFsyncdir -> IO (FunPtr CFsyncdir)
+
+type CInit = Ptr FuseConnInfo -> Ptr FuseConfig -> IO (Ptr ())
+foreign import ccall "wrapper"
+  mkInit :: CInit -> IO (FunPtr CInit)
+
+type CDestroy = Ptr () -> IO ()
+foreign import ccall "wrapper"
+  mkDestroy :: CDestroy -> IO (FunPtr CDestroy)
+
+type CAccess = CString -> CInt -> IO CInt
+foreign import ccall "wrapper"
+  mkAccess :: CAccess -> IO (FunPtr CAccess)
+
+type CCreate = CString -> CMode -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkCreate :: CCreate -> IO (FunPtr CCreate)
+
+type CLock = CString -> Ptr FuseFileInfo -> CInt -> Ptr Posix.CFLock
+foreign import ccall "wrapper"
+  mkLock :: CLock -> IO (FunPtr CLock)
+
+-- actual signature:
+-- int(*utimens)(const char *, const struct timespec tv[2], struct fuse_file_info *fi)
+-- TODO is it OK to treat @struct timespec [2]@ as if it is @struct timespec *@?
+type CUtimens = CString -> Ptr TimeSpec -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkUtimens :: CUtimens -> IO (FunPtr CUtimens)
+
+type CBmap = CString -> CSize -> Ptr Word64 -> IO CInt
+foreign import ccall "wrapper"
+  mkBmap :: CBmap -> IO (FunPtr CBmap)
+
+type CIoctl = CString -> CUInt -> Ptr () -> Ptr FuseFileInfo -> CUInt -> Ptr () -> IO CInt
+foreign import ccall "wrapper"
+  mkIoctl :: CIoctl -> IO (FunPtr CIoctl)
+
+type CPoll = CString -> Ptr FuseFileInfo -> Ptr FusePollhandle -> Ptr CUInt -> IO CInt
+foreign import ccall "wrapper"
+  mkPoll :: CPoll -> IO (FunPtr CPoll)
+
+type CWriteBuf = CString -> Ptr FuseBufvec -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkWriteBuf :: CWriteBuf -> IO (FunPtr CWriteBuf)
+
+type CReadBuf = CString -> Ptr (Ptr FuseBufvec) -> CSize -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkReadBuf :: CReadBuf -> IO (FunPtr CReadBuf)
+
+type CFlock = CString -> Ptr FuseFileInfo -> CInt -> IO CInt
+foreign import ccall "wrapper"
+  mkFlock :: CFlock -> IO (FunPtr CFlock)
+
+type CFallocate = CString -> CInt -> COff -> COff -> Ptr FuseFileInfo -> IO CInt
+foreign import ccall "wrapper"
+  mkFallocate :: CFallocate -> IO (FunPtr CFallocate)
+
+type CCopyFileRange = CString -> Ptr FuseFileInfo -> COff -> CString -> Ptr FuseFileInfo -> COff -> CSize -> CInt -> IO CSsize
+foreign import ccall "wrapper"
+  mkCopyFileRange :: CCopyFileRange -> IO (FunPtr CCopyFileRange)
+
+type CLseek = CString -> COff -> CInt -> Ptr FuseFileInfo -> IO COff
+foreign import ccall "wrapper"
+  mkLseek :: CLseek -> IO (FunPtr CLseek)
