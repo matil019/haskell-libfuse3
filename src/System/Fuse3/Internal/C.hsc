@@ -1,18 +1,21 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE RecordWildCards #-}
 -- | C land.
 --
 -- Exported C called from Haskell
 module System.Fuse3.Internal.C where
 
 import Data.Word (Word64)
-import Foreign (FunPtr, Ptr)
+import Foreign (FunPtr, Ptr, Storable, peekByteOff, pokeByteOff)
 import Foreign.C (CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
 import System.Clock (TimeSpec)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.Posix.Types (CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CSsize(CSsize), CUid(CUid))
 
+import qualified Foreign
 import qualified System.Posix.Internals as Posix
+
+#include <fuse.h>
 
 -- TODO check peek/poke on structs
 
@@ -85,7 +88,99 @@ data FuseOperations = FuseOperations
   , fuseLseek         :: FunPtr CLseek
   }
 
--- TODO instance Storable FuseOperations where
+instance Storable FuseOperations where
+  sizeOf _ = #size struct fuse_operations
+
+  alignment _ = #alignment struct fuse_operations
+
+  peek ptr = do
+    fuseGetattr       <- (#peek struct fuse_operations, getattr)         ptr
+    fuseReadlink      <- (#peek struct fuse_operations, readlink)        ptr
+    fuseMknod         <- (#peek struct fuse_operations, mknod)           ptr
+    fuseMkdir         <- (#peek struct fuse_operations, mkdir)           ptr
+    fuseUnlink        <- (#peek struct fuse_operations, unlink)          ptr
+    fuseRmdir         <- (#peek struct fuse_operations, rmdir)           ptr
+    fuseSymlink       <- (#peek struct fuse_operations, symlink)         ptr
+    fuseRename        <- (#peek struct fuse_operations, rename)          ptr
+    fuseLink          <- (#peek struct fuse_operations, link)            ptr
+    fuseChmod         <- (#peek struct fuse_operations, chmod)           ptr
+    fuseChown         <- (#peek struct fuse_operations, chown)           ptr
+    fuseTruncate      <- (#peek struct fuse_operations, truncate)        ptr
+    fuseOpen          <- (#peek struct fuse_operations, open)            ptr
+    fuseRead          <- (#peek struct fuse_operations, read)            ptr
+    fuseWrite         <- (#peek struct fuse_operations, write)           ptr
+    fuseStatfs        <- (#peek struct fuse_operations, statfs)          ptr
+    fuseFlush         <- (#peek struct fuse_operations, flush)           ptr
+    fuseRelease       <- (#peek struct fuse_operations, release)         ptr
+    fuseFsync         <- (#peek struct fuse_operations, fsync)           ptr
+    fuseSetxattr      <- (#peek struct fuse_operations, setxattr)        ptr
+    fuseGetxattr      <- (#peek struct fuse_operations, getxattr)        ptr
+    fuseListxattr     <- (#peek struct fuse_operations, listxattr)       ptr
+    fuseRemovexattr   <- (#peek struct fuse_operations, removexattr)     ptr
+    fuseOpendir       <- (#peek struct fuse_operations, opendir)         ptr
+    fuseReaddir       <- (#peek struct fuse_operations, readdir)         ptr
+    fuseReleasedir    <- (#peek struct fuse_operations, releasedir)      ptr
+    fuseFsyncdir      <- (#peek struct fuse_operations, fsyncdir)        ptr
+    fuseInit          <- (#peek struct fuse_operations, init)            ptr
+    fuseDestroy       <- (#peek struct fuse_operations, destroy)         ptr
+    fuseAccess        <- (#peek struct fuse_operations, access)          ptr
+    fuseCreate        <- (#peek struct fuse_operations, create)          ptr
+    fuseLock          <- (#peek struct fuse_operations, lock)            ptr
+    fuseUtimens       <- (#peek struct fuse_operations, utimens)         ptr
+    fuseBmap          <- (#peek struct fuse_operations, bmap)            ptr
+    fuseIoctl         <- (#peek struct fuse_operations, ioctl)           ptr
+    fusePoll          <- (#peek struct fuse_operations, poll)            ptr
+    fuseWriteBuf      <- (#peek struct fuse_operations, write_buf)       ptr
+    fuseReadBuf       <- (#peek struct fuse_operations, read_buf)        ptr
+    fuseFlock         <- (#peek struct fuse_operations, flock)           ptr
+    fuseFallocate     <- (#peek struct fuse_operations, fallocate)       ptr
+    fuseCopyFileRange <- (#peek struct fuse_operations, copy_file_range) ptr
+    fuseLseek         <- (#peek struct fuse_operations, lseek)           ptr
+    pure FuseOperations{..}
+
+  poke ptr FuseOperations{..} = do
+    (#poke struct fuse_operations, getattr)         ptr fuseGetattr
+    (#poke struct fuse_operations, readlink)        ptr fuseReadlink
+    (#poke struct fuse_operations, mknod)           ptr fuseMknod
+    (#poke struct fuse_operations, mkdir)           ptr fuseMkdir
+    (#poke struct fuse_operations, unlink)          ptr fuseUnlink
+    (#poke struct fuse_operations, rmdir)           ptr fuseRmdir
+    (#poke struct fuse_operations, symlink)         ptr fuseSymlink
+    (#poke struct fuse_operations, rename)          ptr fuseRename
+    (#poke struct fuse_operations, link)            ptr fuseLink
+    (#poke struct fuse_operations, chmod)           ptr fuseChmod
+    (#poke struct fuse_operations, chown)           ptr fuseChown
+    (#poke struct fuse_operations, truncate)        ptr fuseTruncate
+    (#poke struct fuse_operations, open)            ptr fuseOpen
+    (#poke struct fuse_operations, read)            ptr fuseRead
+    (#poke struct fuse_operations, write)           ptr fuseWrite
+    (#poke struct fuse_operations, statfs)          ptr fuseStatfs
+    (#poke struct fuse_operations, flush)           ptr fuseFlush
+    (#poke struct fuse_operations, release)         ptr fuseRelease
+    (#poke struct fuse_operations, fsync)           ptr fuseFsync
+    (#poke struct fuse_operations, setxattr)        ptr fuseSetxattr
+    (#poke struct fuse_operations, getxattr)        ptr fuseGetxattr
+    (#poke struct fuse_operations, listxattr)       ptr fuseListxattr
+    (#poke struct fuse_operations, removexattr)     ptr fuseRemovexattr
+    (#poke struct fuse_operations, opendir)         ptr fuseOpendir
+    (#poke struct fuse_operations, readdir)         ptr fuseReaddir
+    (#poke struct fuse_operations, releasedir)      ptr fuseReleasedir
+    (#poke struct fuse_operations, fsyncdir)        ptr fuseFsyncdir
+    (#poke struct fuse_operations, init)            ptr fuseInit
+    (#poke struct fuse_operations, destroy)         ptr fuseDestroy
+    (#poke struct fuse_operations, access)          ptr fuseAccess
+    (#poke struct fuse_operations, create)          ptr fuseCreate
+    (#poke struct fuse_operations, lock)            ptr fuseLock
+    (#poke struct fuse_operations, utimens)         ptr fuseUtimens
+    (#poke struct fuse_operations, bmap)            ptr fuseBmap
+    (#poke struct fuse_operations, ioctl)           ptr fuseIoctl
+    (#poke struct fuse_operations, poll)            ptr fusePoll
+    (#poke struct fuse_operations, write_buf)       ptr fuseWriteBuf
+    (#poke struct fuse_operations, read_buf)        ptr fuseReadBuf
+    (#poke struct fuse_operations, flock)           ptr fuseFlock
+    (#poke struct fuse_operations, fallocate)       ptr fuseFallocate
+    (#poke struct fuse_operations, copy_file_range) ptr fuseCopyFileRange
+    (#poke struct fuse_operations, lseek)           ptr fuseLseek
 
 data FusePollhandle -- struct fuse_pollhandle
 

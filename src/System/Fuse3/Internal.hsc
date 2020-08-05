@@ -150,7 +150,6 @@ data AccessMode
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
 
--- TODO add low-level FuseOperations whose members are @FunPtr foo@
 -- memo: when adding a new field, make sure to update withCFuseOperations
 -- | The file system operations.
 --
