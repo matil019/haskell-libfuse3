@@ -348,7 +348,9 @@ foreign import ccall "wrapper"
 
 -- actual signature:
 -- int(*utimens)(const char *, const struct timespec tv[2], struct fuse_file_info *fi)
--- TODO is it OK to treat @struct timespec [2]@ as if it is @struct timespec *@?
+-- We treat @struct timespec [2]@ as if it is @struct timespec *@ because they are compatible in
+-- function parameter lists:
+-- https://en.cppreference.com/w/c/language/type#Compatible_types
 type CUtimens = CString -> Ptr TimeSpec -> Ptr FuseFileInfo -> IO CInt
 foreign import ccall "wrapper"
   mkUtimens :: CUtimens -> IO (FunPtr CUtimens)
