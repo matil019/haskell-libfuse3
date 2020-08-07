@@ -637,9 +637,7 @@ withCFuseOperations ops handler cont =
 --
 -- The multithreaded runtime will be used regardless of the threading flag!
 -- See the comment in @fuse_session_exit@ for why.
---
--- TODO the second part of tuple may be unused
-fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Maybe (Maybe String, Bool, Bool))
+fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Maybe (Maybe String, Bool))
 fuseParseCommandLine pArgs =
   allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> do
     retval <- C.fuse_parse_cmdline pArgs pOpts
@@ -654,9 +652,8 @@ fuseParseCommandLine pArgs =
               free pMountPoint
               pure $ Just a
             else pure Nothing
-        multiThreaded <- (== (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, singlethread) pOpts
         foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
-        pure $ Just (mountPoint, multiThreaded, foreground)
+        pure $ Just (mountPoint, foreground)
       else pure Nothing
 
 -- TODO or rather, @fuse_daemonize@?
@@ -736,8 +733,8 @@ fuseRun prog args ops handler =
       cmd <- fuseParseCommandLine pArgs
       case cmd of
         Nothing -> fail ""
-        Just (Nothing, _, _) -> fail "Usage error: mount point required"
-        Just (Just mountPt, _, foreground) ->
+        Just (Nothing, _) -> fail "Usage error: mount point required"
+        Just (Just mountPt, foreground) ->
           withCFuseOperations ops handler $ \pOp -> do
             let opSize = (#size struct fuse_operations)
                 privData = nullPtr
