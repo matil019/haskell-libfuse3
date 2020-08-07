@@ -49,10 +49,14 @@ data FileStat = FileStat
   , -- | Group ID of owner. @st_gid@
     fileGroup :: GroupID
   , -- | Device ID (if special file). @st_rdev@
+    --
+    -- You should set @0@ for a non-special file.
     specialDeviceID :: DeviceID
   , -- | Total size, in bytes. @st_size@
     fileSize :: FileOffset
   , -- | Number of 512B blocks allocated. @st_blocks@
+    --
+    -- TODO or just set @0@ ????
     blockCount :: CBlkSize -- see also: https://github.com/haskell/unix/pull/78/files
   -- these assumes Linux >= 2.6
   , -- | Time of last access. @st_atim@
