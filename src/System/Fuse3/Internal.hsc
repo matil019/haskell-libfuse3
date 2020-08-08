@@ -39,7 +39,9 @@ SUCH DAMAGE.
 module System.Fuse3.Internal where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
-import Control.Monad ((>=>), unless, void)
+import Control.Monad ((>=>), unless, void, when)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
@@ -785,24 +787,23 @@ withCFuseOperations ops handler cont =
 --
 -- The multithreaded runtime will be used regardless of the threading flag!
 -- See the comment in @fuse_session_exit@ for why.
-fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Maybe (Maybe String, Bool))
+fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Either String FuseMainArgs)
 fuseParseCommandLine pArgs =
-  allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> do
-    retval <- C.fuse_parse_cmdline pArgs pOpts
-    if retval == 0
-      then do
-        mountPoint <- do
-          pMountPoint <- (#peek struct fuse_cmdline_opts, mountpoint) pOpts
-          if pMountPoint /= nullPtr
-            then do
-              a <- peekFilePath pMountPoint
-              -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
-              free pMountPoint
-              pure $ Just a
-            else pure Nothing
-        foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
-        pure $ Just (mountPoint, foreground)
-      else pure Nothing
+  allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> runExceptT $ do
+    retval <- liftIO $ C.fuse_parse_cmdline pArgs pOpts
+    when (retval /= 0) $
+      throwE "unknown error" -- TODO fallback to --help message
+    mountPoint <- do
+      pMountPoint <- liftIO $ (#peek struct fuse_cmdline_opts, mountpoint) pOpts
+      when (pMountPoint == nullPtr) $
+        throwE "unknown error" -- TODO fallback to --help message
+      liftIO $ do
+        a <- peekFilePath pMountPoint
+        -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
+        free pMountPoint
+        pure a
+    foreground <- liftIO $ (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
+    pure (foreground, mountPoint)
 
 -- TODO or rather, @fuse_daemonize@?
 -- | Haskell version of @daemon(2)@
@@ -844,13 +845,14 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
+type FuseMainArgs = (Bool, String) -- (foreground, mountpoint)
+
 -- | Mounts the filesystem, forks, and then starts fuse.
 fuseMainReal
-  :: Bool
-  -> Ptr C.StructFuse
-  -> String
+  :: Ptr C.StructFuse
+  -> FuseMainArgs
   -> IO a
-fuseMainReal = \foreground pFuse mountPt ->
+fuseMainReal = \pFuse (foreground, mountPt) ->
   let strategy = if foreground
         then (>>) (changeWorkingDirectory "/") . procMain
         else daemon . procMain
@@ -881,9 +883,8 @@ fuseRun prog args ops handler =
       -- TODO don't parse the commandline arguments by ourselves to make --help work again
       cmd <- fuseParseCommandLine pArgs
       case cmd of
-        Nothing -> fail ""
-        Just (Nothing, _) -> fail "Usage error: mount point required"
-        Just (Just mountPt, foreground) ->
+        Left e -> fail e
+        Right mainArgs ->
           withCFuseOperations ops handler $ \pOp -> do
             let opSize = (#size struct fuse_operations)
                 privData = nullPtr
@@ -891,7 +892,7 @@ fuseRun prog args ops handler =
             -- but it's unlikely because fuseParseCommandLine already succeeded at this point
             -- TODO dispose pFuse? (@fuse_destroy@)
             pFuse <- C.fuse_new pArgs pOp opSize privData
-            fuseMainReal foreground pFuse mountPt)
+            fuseMainReal pFuse mainArgs)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
