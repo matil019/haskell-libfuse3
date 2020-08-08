@@ -22,7 +22,8 @@ nullGetattr "/" = do
   fileGroup <- getRealGroupID
   now <- getTime Realtime
   pure $ Right $ FileStat
-    { fileMode = foldl' unionFileModes regularFileMode [ownerReadMode, ownerWriteMode, groupReadMode, otherReadMode]
+    { fileID = 0
+    , fileMode = foldl' unionFileModes regularFileMode [ownerReadMode, ownerWriteMode, groupReadMode, otherReadMode]
     , linkCount = 1
     , fileOwner
     , fileGroup

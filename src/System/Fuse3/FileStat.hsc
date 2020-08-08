@@ -13,8 +13,9 @@ import System.Posix.Types
   ( CBlkSize
   , DeviceID
   , Fd(Fd)
-  , FileOffset
+  , FileID
   , FileMode
+  , FileOffset
   , GroupID
   , LinkCount
   , UserID
@@ -37,10 +38,13 @@ import qualified Foreign
 --
 -- @Ptr FileStat@ can be cast to @Ptr `System.Posix.Internals.CStat`@ and vice versa.
 --
--- The @st_dev@ and @st_blksize@ fields are ignored. The @st_ino@ field is ignored unless the
--- @use_ino@ mount option is given. TODO add support for it
+-- The @st_ino@ field is ignored unless the @use_ino@ mount option is given.
+--
+-- The @st_dev@ and @st_blksize@ fields are ignored by libfuse, so not provided.
 data FileStat = FileStat
-  { -- | File type and mode. @st_mode@
+  { -- | Inode number. @st_ino@
+    fileID :: FileID
+  , -- | File type and mode. @st_mode@
     fileMode :: FileMode
   , -- | Number of hard links. @st_nlink@
     linkCount :: LinkCount
@@ -75,6 +79,7 @@ instance Storable FileStat where
   alignment _ = #alignment struct stat
 
   peek ptr = do
+    fileID     <- (#peek struct stat, st_ino) ptr
     fileMode   <- (#peek struct stat, st_mode) ptr
     linkCount  <- (#peek struct stat, st_nlink) ptr
     fileOwner  <- (#peek struct stat, st_uid) ptr
@@ -88,6 +93,7 @@ instance Storable FileStat where
     pure FileStat{..}
 
   poke ptr FileStat{..} = do
+    (#poke struct stat, st_ino)    ptr fileID
     (#poke struct stat, st_mode)   ptr fileMode
     (#poke struct stat, st_nlink)  ptr linkCount
     (#poke struct stat, st_uid)    ptr fileOwner
