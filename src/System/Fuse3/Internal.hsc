@@ -40,7 +40,7 @@ module System.Fuse3.Internal where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad ((>=>), unless, void)
-import Data.Bits ((.&.), Bits)
+import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
 import Foreign
   ( FunPtr
@@ -67,7 +67,7 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, peekCString, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
@@ -78,6 +78,7 @@ import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
+import System.Posix.Internals (c_access)
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
 
@@ -142,6 +143,26 @@ data AccessMode
   -- | Reading, writing and executing permissions (@R_OK@, @W_OK@ and @X_OK@, resp.)
   | PermOK Bool Bool Bool
   deriving (Eq, Show)
+
+-- | Tests if access permissions to the file is granted or the file exists.
+--
+-- Calls @access@. Compared to `System.Posix.Files.fileAccess` and
+-- `System.Posix.Files.fileExist`, this function doesn't translate the errno and just
+-- returns it.
+--
+-- @pure `eOK`@ on success and `getErrno` on failure. Never throws an exception.
+access :: FilePath -> AccessMode -> IO Errno
+access path mode = withCString path $ \cPath -> do
+  let cMode = case mode of
+        FileOK -> #const F_OK
+        PermOK r w x ->
+          (if r then (#const R_OK) else 0) .|.
+          (if w then (#const W_OK) else 0) .|.
+          (if x then (#const X_OK) else 0)
+  ret <- c_access cPath cMode
+  if ret == 0
+    then pure eOK
+    else getErrno
 
 -- TODO move to another module?
 -- | @testBitSet bits mask@ is @True@ iff all bits in @mask@ are set in @bits@.

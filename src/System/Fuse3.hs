@@ -4,6 +4,7 @@ module System.Fuse3
   , defaultFuseOps
   , FuseConfig(..)
   , AccessMode(..)
+  , access
   , EntryType(..)
   , entryTypeToFileMode
   , fileModeToEntryType
