@@ -191,7 +191,8 @@ data FuseOperations fh = FuseOperations
 
   , -- | Implements 'System.Posix.Files.readSymbolicLink' operation (POSIX @readlink(2)@).
     --
-    -- The returned 'FilePath' might be truncated depending on caller buffer size.
+    -- This function should not append a terminating NUL byte. The returned 'FilePath'
+    -- might be truncated depending on caller buffer size.
     fuseReadlink :: Maybe (FilePath -> IO (Either Errno FilePath))
 
   , -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
