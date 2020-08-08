@@ -144,6 +144,13 @@ data AccessMode
   | PermOK Bool Bool Bool
   deriving (Eq, Show)
 
+-- | Passed to `fuseSetxattr`.
+data SetxattrFlag
+  = SetxattrDefault
+  | SetxattrCreate
+  | SetxattrReplace
+  deriving (Eq, Show)
+
 -- | Tests if access permissions to the file is granted or the file exists.
 --
 -- Calls @access@. Compared to `System.Posix.Files.fileAccess` and

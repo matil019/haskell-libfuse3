@@ -15,6 +15,7 @@ module System.Fuse3
   , FileSystemStats
   , getFileSystemStats
   , getFileSystemStatsFd
+  , SetxattrFlag(..)
   , fuseMain
   )
   where
