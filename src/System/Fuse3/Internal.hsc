@@ -991,8 +991,8 @@ getFH pFuseFileInfo
 getFHJust :: Ptr C.FuseFileInfo -> IO fh
 getFHJust = fmap fromJust . getFH
 
--- | Embeds a file handle into `C.FuseFileInfo`. It should be freed with `delFH` when no longer
--- required.
+-- | Embeds a file handle into `C.FuseFileInfo`. It should be freed with `delFH` when no
+-- longer required.
 newFH :: Ptr C.FuseFileInfo -> fh -> IO ()
 newFH pFuseFileInfo fh = do
   sptr <- newStablePtr fh
@@ -1002,7 +1002,10 @@ newFH pFuseFileInfo fh = do
 delFH :: Ptr C.FuseFileInfo -> IO ()
 delFH pFuseFileInfo = do
   sptr <- (#peek struct fuse_file_info, fh) pFuseFileInfo
-  freeStablePtr $ castPtrToStablePtr sptr
+  -- if sptr is NULL, it should mean newFH have not called. See getFH and getFHJust for
+  -- more info
+  unless (sptr == nullPtr) $
+    freeStablePtr $ castPtrToStablePtr sptr
 
 -- TODO rename this
 foreign import ccall "dynamic"
