@@ -2,6 +2,7 @@
 module System.Fuse3
   ( FuseOperations(..)
   , defaultFuseOps
+  , FuseConfig(..)
   , AccessMode(..)
   , EntryType(..)
   , entryTypeToFileMode

@@ -1,5 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK no-print-missing-docs #-}
 {-| Based on `System.Fuse` in the package "HFuse-0.2.5.0".
@@ -57,6 +58,7 @@ import Foreign
   , newStablePtr
   , nullFunPtr
   , nullPtr
+  , peek
   , peekByteOff
   , poke
   , pokeByteOff
@@ -65,7 +67,7 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CInt(CInt), CStringLen, Errno(Errno), eOK, peekCString, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
@@ -289,7 +291,9 @@ data FuseOperations fh = FuseOperations
     fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
   , -- | Initializes the filesystem.  This is called before all other operations.
-    fuseInit :: Maybe (IO ())
+    --
+    -- The filesystem may modify `FuseConfig` to configure the API.
+    fuseInit :: Maybe (FuseConfig -> IO FuseConfig)
 
   , -- | Called on filesystem exit to allow cleanup.
     fuseDestroy :: Maybe (IO ())
@@ -349,6 +353,36 @@ defaultFuseOps = FuseOperations
   , fuseDestroy = Nothing
   , fuseAccess = Nothing
   }
+
+data FuseConfig = FuseConfig
+  { -- | @entry_timeout@
+    entryTimeout :: Double
+  , -- | @negative_timeout@
+    negativeTimeout :: Double
+  , -- | @attr_timeout@
+    attrTimeout :: Double
+  , -- | @use_ino@
+    useIno :: Bool
+  }
+  deriving (Eq, Show)
+
+toCFuseConfig :: FuseConfig -> C.FuseConfig
+toCFuseConfig FuseConfig{..} = C.FuseConfig
+  { C.entryTimeout = CDouble entryTimeout
+  , C.negativeTimeout = CDouble negativeTimeout
+  , C.attrTimeout = CDouble attrTimeout
+  , C.useIno = if useIno then 1 else 0
+  }
+
+fromCFuseConfig :: C.FuseConfig -> FuseConfig
+fromCFuseConfig C.FuseConfig{..} = FuseConfig
+  { entryTimeout = unCDouble entryTimeout
+  , negativeTimeout = unCDouble negativeTimeout
+  , attrTimeout = unCDouble attrTimeout
+  , useIno = useIno /= 0
+  }
+  where
+  unCDouble (CDouble x) = x
 
 -- | Allocates a @fuse_args@ struct to hold commandline arguments.
 withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
@@ -605,11 +639,19 @@ withCFuseOperations ops handler cont =
     fh <- getFH pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
-  wrapInit :: IO () -> C.CInit
+  wrapInit :: (FuseConfig -> IO FuseConfig) -> C.CInit
   -- TODO HFuse used `defaultExceptionHandler` instead of handler
   -- TODO use parameters
-  wrapInit go _fuseConnInfo _fuseConfig = do
-    _ <- handle (void . handler) go
+  wrapInit go _fuseConnInfo pFuseConfig = do
+    _ <- handle (void . handler) $ do
+      -- @pFuseConfig@ is filled beforehand by fuse_opt_parse in libfuse so we pass it
+      -- as-is to the callback as the default value.
+      fuseConfigOld <- fromCFuseConfig <$> peek pFuseConfig
+      fuseConfigNew <- go fuseConfigOld
+      -- The return value of the callback is poked back to @pFuseConfig@. Note that, by
+      -- doing this the fields of @fuse_config@ which we do /not/ implement are left
+      -- unchanged. This is the intended behavior.
+      poke pFuseConfig $ toCFuseConfig fuseConfigNew
     pure nullPtr
 
   wrapDestroy :: IO () -> C.CDestroy

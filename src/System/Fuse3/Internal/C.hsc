@@ -6,7 +6,7 @@ module System.Fuse3.Internal.C where
 
 import Data.Word (Word64)
 import Foreign (FunPtr, Ptr, Storable, peekByteOff, pokeByteOff)
-import Foreign.C (CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
+import Foreign.C (CDouble, CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
 import System.Clock (TimeSpec)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
@@ -27,7 +27,41 @@ data FuseBufvec -- struct fuse_bufvec
 
 data FuseCmdlineOpts -- struct fuse_cmdline_opts
 
-data FuseConfig -- struct fuse_config
+-- | The direct, storable representation of @struct fuse_config@.
+--
+-- Not to be confused with the high-level `System.Fuse3.Internal.FuseConfig`.
+--
+-- TODO add more fields
+data FuseConfig = FuseConfig
+  { -- | @entry_timeout@
+    entryTimeout :: CDouble
+  , -- | @negative_timeout@
+    negativeTimeout :: CDouble
+  , -- | @attr_timeout@
+    attrTimeout :: CDouble
+  , -- | @use_ino@
+    useIno :: CInt
+  }
+  deriving (Eq, Show)
+
+-- | Targets @struct fuse_config@.
+instance Storable FuseConfig where
+  sizeOf _ = #size struct fuse_config
+
+  alignment _ = #alignment struct fuse_config
+
+  peek ptr = do
+    entryTimeout    <- (#peek struct fuse_config, entry_timeout)    ptr
+    negativeTimeout <- (#peek struct fuse_config, negative_timeout) ptr
+    attrTimeout     <- (#peek struct fuse_config, attr_timeout)     ptr
+    useIno          <- (#peek struct fuse_config, use_ino)          ptr
+    pure FuseConfig{..}
+
+  poke ptr FuseConfig{..} = do
+    (#poke struct fuse_config, entry_timeout)    ptr entryTimeout
+    (#poke struct fuse_config, negative_timeout) ptr negativeTimeout
+    (#poke struct fuse_config, attr_timeout)     ptr attrTimeout
+    (#poke struct fuse_config, use_ino)          ptr useIno
 
 data FuseConnInfo -- struct fuse_conn_info
 
