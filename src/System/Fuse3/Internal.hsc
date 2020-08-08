@@ -151,6 +151,8 @@ data AccessMode
 -- returns it.
 --
 -- @pure `eOK`@ on success and `getErrno` on failure. Never throws an exception.
+--
+-- TODO rename to @accessErrno@ to contrast the fact that this doesn't throw?
 access :: FilePath -> AccessMode -> IO Errno
 access path mode = withFilePath path $ \cPath -> do
   let cMode = case mode of
@@ -198,6 +200,8 @@ data FuseOperations fh = FuseOperations
   , -- | Implements 'System.Posix.Files.createDevice' (POSIX @mknod(2)@).
     --
     -- This function will also be called for regular file creation if `fuseCreate` is not defined.
+    --
+    -- TODO remove EntryType parameter? because it's redundant (the same information is contained in FileMode)
     fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
 
   , -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
@@ -524,6 +528,7 @@ withCFuseOperations ops handler cont =
   wrapRename :: (FilePath -> FilePath -> IO Errno) -> C.CRename
   wrapRename go pOld pNew _flags = handleAsFuseError $ do
     -- we ignore the rename flags because #define _GNU_SOURCE is needed to use the constants
+    -- TODO return EINVAL if flags are specified?
     old <- peekFilePath pOld
     new <- peekFilePath pNew
     go old new
@@ -588,6 +593,7 @@ withCFuseOperations ops handler cont =
   wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
+    -- TODO use unsafePackCStringLen?
     buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
     go filePath fh buf off
 
