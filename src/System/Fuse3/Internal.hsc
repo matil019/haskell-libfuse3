@@ -67,7 +67,7 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
@@ -78,7 +78,7 @@ import System.IO.Error (catchIOError, ioeGetErrorString)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
-import System.Posix.Internals (c_access)
+import System.Posix.Internals (c_access, peekFilePath, withFilePath)
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
 
@@ -152,7 +152,7 @@ data AccessMode
 --
 -- @pure `eOK`@ on success and `getErrno` on failure. Never throws an exception.
 access :: FilePath -> AccessMode -> IO Errno
-access path mode = withCString path $ \cPath -> do
+access path mode = withFilePath path $ \cPath -> do
   let cMode = case mode of
         FileOK -> #const F_OK
         PermOK r w x ->
@@ -476,7 +476,7 @@ withCFuseOperations ops handler cont =
 
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
     go filePath mfh >>= \case
       Left errno -> pure errno
@@ -486,7 +486,7 @@ withCFuseOperations ops handler cont =
 
   wrapReadlink :: (FilePath -> IO (Either Errno FilePath)) -> C.CReadlink
   wrapReadlink go pFilePath pBuf bufSize = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath >>= \case
       Left errno -> pure errno
       Right target -> do
@@ -497,64 +497,64 @@ withCFuseOperations ops handler cont =
 
   wrapMknod :: (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno) -> C.CMknod
   wrapMknod go pFilePath mode dev = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath (fileModeToEntryType mode) mode dev
 
   wrapMkdir :: (FilePath -> FileMode -> IO Errno) -> C.CMkdir
   wrapMkdir go pFilePath mode = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath mode
 
   wrapUnlink :: (FilePath -> IO Errno) -> C.CUnlink
   wrapUnlink go pFilePath = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath
 
   wrapRmdir :: (FilePath -> IO Errno) -> C.CRmdir
   wrapRmdir go pFilePath = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath
 
   wrapSymlink :: (FilePath -> FilePath -> IO Errno) -> C.CSymlink
   wrapSymlink go pSource pDestination = handleAsFuseError $ do
-    source <- peekCString pSource
-    destination <- peekCString pDestination
+    source <- peekFilePath pSource
+    destination <- peekFilePath pDestination
     go source destination
 
   wrapRename :: (FilePath -> FilePath -> IO Errno) -> C.CRename
   wrapRename go pOld pNew _flags = handleAsFuseError $ do
     -- we ignore the rename flags because #define _GNU_SOURCE is needed to use the constants
-    old <- peekCString pOld
-    new <- peekCString pNew
+    old <- peekFilePath pOld
+    new <- peekFilePath pNew
     go old new
 
   wrapLink :: (FilePath -> FilePath -> IO Errno) -> C.CLink
   wrapLink go pSource pDestination = handleAsFuseError $ do
-    source <- peekCString pSource
-    destination <- peekCString pDestination
+    source <- peekFilePath pSource
+    destination <- peekFilePath pDestination
     go source destination
 
   wrapChmod :: (FilePath -> Maybe fh -> FileMode -> IO Errno) -> C.CChmod
   wrapChmod go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
     go filePath mfh mode
 
   wrapChown :: (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno) -> C.CChown
   wrapChown go pFilePath uid gid pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
     go filePath mfh uid gid
 
   wrapTruncate :: (FilePath -> Maybe fh -> FileOffset -> IO Errno) -> C.CTruncate
   wrapTruncate go pFilePath off pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     mfh <- maybePeek getFH pFuseFileInfo
     go filePath mfh off
 
   wrapOpen :: (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)) -> C.COpen
   wrapOpen go pFilePath pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
     let openFileFlags = OpenFileFlags
           { append   = testBitSet flags (#const O_APPEND)
@@ -575,7 +575,7 @@ withCFuseOperations ops handler cont =
 
   wrapRead :: (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)) -> C.CRead
   wrapRead go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     go filePath fh bufSize off >>= \case
       Left errno -> pure $ Left errno
@@ -586,14 +586,14 @@ withCFuseOperations ops handler cont =
 
   wrapWrite :: (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt)) -> C.CWrite
   wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
     go filePath fh buf off
 
   wrapStatfs :: (String -> IO (Either Errno FileSystemStats)) -> C.CStatfs
   wrapStatfs go pStr pStatVFS = handleAsFuseError $ do
-    str <- peekCString pStr
+    str <- peekFilePath pStr
     go str >>= \case
       Left errno -> pure errno
       Right statvfs -> do
@@ -602,7 +602,7 @@ withCFuseOperations ops handler cont =
 
   wrapFlush :: (FilePath -> fh -> IO Errno) -> C.CFlush
   wrapFlush go pFilePath pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     go filePath fh
 
@@ -610,20 +610,20 @@ withCFuseOperations ops handler cont =
   wrapRelease go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
     go' = handleAsFuseError $ do
-      filePath <- peekCString pFilePath
+      filePath <- peekFilePath pFilePath
       fh <- getFH pFuseFileInfo
       go filePath fh
       pure eOK
 
   wrapFsync :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsync
   wrapFsync go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapOpendir :: (FilePath -> IO (Either Errno fh)) -> C.COpendir
   wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath >>= \case
       Left errno -> pure errno
       Right fh -> do
@@ -632,12 +632,12 @@ withCFuseOperations ops handler cont =
 
   wrapReaddir :: (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     let fillDir = mkFillDir pFillDir
         fillEntry :: (FilePath, FileStat) -> IO ()
         fillEntry (fileName, fileStat) =
-          withCString fileName $ \pFileName ->
+          withFilePath fileName $ \pFileName ->
           with fileStat $ \pFileStat -> do
             _ <- fillDir pBuf pFileName pFileStat 0 0
             pure ()
@@ -651,13 +651,13 @@ withCFuseOperations ops handler cont =
   wrapReleasedir go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
     go' = handleAsFuseError $ do
-      filePath <- peekCString pFilePath
+      filePath <- peekFilePath pFilePath
       fh <- getFH pFuseFileInfo
       go filePath fh
 
   wrapFsyncdir :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsyncdir
   wrapFsyncdir go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     fh <- getFH pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
@@ -682,7 +682,7 @@ withCFuseOperations ops handler cont =
 
   wrapAccess :: (FilePath -> AccessMode -> IO Errno) -> C.CAccess
   wrapAccess go pFilePath mode = handleAsFuseError $ do
-    filePath <- peekCString pFilePath
+    filePath <- peekFilePath pFilePath
     go filePath accessMode
     where
     accessMode
@@ -711,7 +711,7 @@ fuseParseCommandLine pArgs =
           pMountPoint <- (#peek struct fuse_cmdline_opts, mountpoint) pOpts
           if pMountPoint /= nullPtr
             then do
-              a <- peekCString pMountPoint
+              a <- peekFilePath pMountPoint
               -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
               free pMountPoint
               pure $ Just a
@@ -770,7 +770,7 @@ fuseMainReal = \foreground pFuse mountPt ->
   let strategy = if foreground
         then (>>) (changeWorkingDirectory "/") . procMain
         else daemon . procMain
-  in withCString mountPt $ \cMountPt -> do
+  in withFilePath mountPt $ \cMountPt -> do
        -- TODO handle failure! (return value /= 0) throw? return Left?
        _ <- C.fuse_mount pFuse cMountPt
        strategy pFuse `finally` C.fuse_unmount pFuse
