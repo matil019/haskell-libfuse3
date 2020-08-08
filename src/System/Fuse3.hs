@@ -10,7 +10,10 @@ module System.Fuse3
   , SyncType(..)
   , FileStat(..)
   , getFileStat
+  , getFileStatFd
   , FileSystemStats
+  , getFileSystemStats
+  , getFileSystemStatsFd
   , fuseMain
   )
   where
