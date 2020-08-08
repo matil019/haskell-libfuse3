@@ -156,7 +156,7 @@ xmpFsync :: IO Errno
 -- Just a stub. This method is optional and can safely be left unimplemented
 xmpFsync = pure eOK
 
-xmpFallocate :: Fd -> FileMode -> FileOffset -> FileOffset -> IO Errno
+xmpFallocate :: Fd -> CInt -> FileOffset -> FileOffset -> IO Errno
 xmpFallocate _ mode _ _ | mode /= 0 = pure eOPNOTSUPP
 xmpFallocate (Fd fd) _ offset len =
   -- currently `System.Posix.Fcntl.fileAllocate` is broken
@@ -219,7 +219,7 @@ xmpOper = defaultFuseOps
   , fuseStatfs        = Just xmpStatfs
   , fuseRelease       = Just $ \_ -> xmpRelease
   , fuseFsync         = Just $ \_ _ _ -> xmpFsync
-  -- , fuseFallocate     = Just xmpFallocate
+  , fuseFallocate     = Just $ \_ fd mode offset len -> xmpFallocate fd mode offset len
   -- , fuseSetxattr      = Just xmpSetxattr
   -- , fuseGetxattr      = Just xmpGetxattr
   -- , fuseListxattr     = Just xmpListxattr

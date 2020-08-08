@@ -370,7 +370,11 @@ data FuseOperations fh = FuseOperations
     -- TODO , write_buf :: _
     -- TODO , read_buf :: _
     -- TODO , flock :: _
-    -- TODO , fallocate :: _
+
+  , -- | Implements 'System.Posix.Fcntl.fileAllocate' (@posix_fallocate(3)@). Allocates
+    -- space for an open file.
+    fuseFallocate :: Maybe (FilePath -> fh -> CInt -> FileOffset -> FileOffset -> IO Errno)
+
     -- TODO , copy_file_range :: _
     -- TODO , lseek :: _
   }
@@ -406,6 +410,7 @@ defaultFuseOps = FuseOperations
   , fuseAccess = Nothing
   , fuseCreate = Nothing
   , fuseUtimens = Nothing
+  , fuseFallocate = Nothing
   }
 
 data FuseConfig = FuseConfig
@@ -501,6 +506,7 @@ withCFuseOperations ops handler cont =
     withC C.mkAccess     wrapAccess     (fuseAccess ops)     $ (#poke struct fuse_operations, access) pOps >=> \_ ->
     withC C.mkCreate     wrapCreate     (fuseCreate ops)     $ (#poke struct fuse_operations, create) pOps >=> \_ ->
     withC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    $ (#poke struct fuse_operations, utimens) pOps >=> \_ ->
+    withC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  $ (#poke struct fuse_operations, fallocate) pOps >=> \_ ->
     cont pOps
   where
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and loan it to a continuation
@@ -763,6 +769,12 @@ withCFuseOperations ops handler cont =
     mfh <- maybePeek getFH pFuseFileInfo
     [atime, mtime] <- peekArray 2 arrTs
     go filePath mfh atime mtime
+
+  wrapFallocate :: (FilePath -> fh -> CInt -> FileOffset -> FileOffset -> IO Errno) -> C.CFallocate
+  wrapFallocate go pFilePath mode offset len pFuseFileInfo = handleAsFuseError $ do
+    filePath <- peekFilePath pFilePath
+    fh <- getFH pFuseFileInfo
+    go filePath fh mode offset len
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about.
