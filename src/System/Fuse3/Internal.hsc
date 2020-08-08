@@ -42,6 +42,7 @@ import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad ((>=>), unless, void)
 import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
+import Data.Maybe (fromJust)
 import Foreign
   ( FunPtr
   , Ptr
@@ -54,7 +55,6 @@ import Foreign
   , free
   , freeHaskellFunPtr
   , freeStablePtr
-  , maybePeek
   , newStablePtr
   , nullFunPtr
   , nullPtr
@@ -524,7 +524,7 @@ withCFuseOperations ops handler cont =
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    mfh <- maybePeek getFH pFuseFileInfo
+    mfh <- getFH pFuseFileInfo
     go filePath mfh >>= \case
       Left errno -> pure errno
       Right stat -> do
@@ -585,19 +585,19 @@ withCFuseOperations ops handler cont =
   wrapChmod :: (FilePath -> Maybe fh -> FileMode -> IO Errno) -> C.CChmod
   wrapChmod go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    mfh <- maybePeek getFH pFuseFileInfo
+    mfh <- getFH pFuseFileInfo
     go filePath mfh mode
 
   wrapChown :: (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno) -> C.CChown
   wrapChown go pFilePath uid gid pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    mfh <- maybePeek getFH pFuseFileInfo
+    mfh <- getFH pFuseFileInfo
     go filePath mfh uid gid
 
   wrapTruncate :: (FilePath -> Maybe fh -> FileOffset -> IO Errno) -> C.CTruncate
   wrapTruncate go pFilePath off pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    mfh <- maybePeek getFH pFuseFileInfo
+    mfh <- getFH pFuseFileInfo
     go filePath mfh off
 
   wrapOpen :: (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)) -> C.COpen
@@ -624,7 +624,7 @@ withCFuseOperations ops handler cont =
   wrapRead :: (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)) -> C.CRead
   wrapRead go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     go filePath fh bufSize off >>= \case
       Left errno -> pure $ Left errno
       Right bytes -> BU.unsafeUseAsCStringLen bytes $ \(pBytes, bytesLen) -> do
@@ -635,7 +635,7 @@ withCFuseOperations ops handler cont =
   wrapWrite :: (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt)) -> C.CWrite
   wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     -- TODO use unsafePackCStringLen?
     buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
     go filePath fh buf off
@@ -652,7 +652,7 @@ withCFuseOperations ops handler cont =
   wrapFlush :: (FilePath -> fh -> IO Errno) -> C.CFlush
   wrapFlush go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     go filePath fh
 
   wrapRelease :: (FilePath -> fh -> IO ()) -> C.CRelease
@@ -660,14 +660,14 @@ withCFuseOperations ops handler cont =
     where
     go' = handleAsFuseError $ do
       filePath <- peekFilePath pFilePath
-      fh <- getFH pFuseFileInfo
+      fh <- getFHJust pFuseFileInfo
       go filePath fh
       pure eOK
 
   wrapFsync :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsync
   wrapFsync go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapOpendir :: (FilePath -> IO (Either Errno fh)) -> C.COpendir
@@ -682,7 +682,7 @@ withCFuseOperations ops handler cont =
   wrapReaddir :: (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     let fillDir = mkFillDir pFillDir
         fillEntry :: (FilePath, FileStat) -> IO ()
         fillEntry (fileName, fileStat) =
@@ -701,13 +701,13 @@ withCFuseOperations ops handler cont =
     where
     go' = handleAsFuseError $ do
       filePath <- peekFilePath pFilePath
-      fh <- getFH pFuseFileInfo
+      fh <- getFHJust pFuseFileInfo
       go filePath fh
 
   wrapFsyncdir :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsyncdir
   wrapFsyncdir go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapInit :: (FuseConfig -> IO FuseConfig) -> C.CInit
@@ -766,14 +766,14 @@ withCFuseOperations ops handler cont =
   wrapUtimens :: (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno) -> C.CUtimens
   wrapUtimens go pFilePath arrTs pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    mfh <- maybePeek getFH pFuseFileInfo
+    mfh <- getFH pFuseFileInfo
     [atime, mtime] <- peekArray 2 arrTs
     go filePath mfh atime mtime
 
   wrapFallocate :: (FilePath -> fh -> CInt -> FileOffset -> FileOffset -> IO Errno) -> C.CFallocate
   wrapFallocate go pFilePath mode offset len pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFH pFuseFileInfo
+    fh <- getFHJust pFuseFileInfo
     go filePath fh mode offset len
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
@@ -957,10 +957,39 @@ withHaskellFunPtr wrapper fun = bracket (wrapper fun) freeHaskellFunPtr
 
 -- TODO move to another module?
 -- | Gets a file handle from `C.FuseFileInfo` which is embedded with `newFH`.
-getFH :: Ptr C.FuseFileInfo -> IO fh
-getFH pFuseFileInfo = do
-  sptr <- (#peek struct fuse_file_info, fh) pFuseFileInfo
-  deRefStablePtr $ castPtrToStablePtr sptr
+--
+-- If either the @Ptr `C.FuseFileInfo`@ itself or its @fh@ field is NULL, returns @Nothing@.
+getFH :: Ptr C.FuseFileInfo -> IO (Maybe fh)
+getFH pFuseFileInfo
+  | pFuseFileInfo == nullPtr = pure Nothing
+  | otherwise = do
+    sptr <- (#peek struct fuse_file_info, fh) pFuseFileInfo
+    -- Note that this implementation relies on the fact that @fuse_file_info.fh@ is
+    -- @NULL@-initialized before @fuse_operations.open@ and @.opendir@, and remains @NULL@
+    -- if they are unimplemented. It's a hack but we check this because because if we
+    -- didn't, we'll hit undefined behavior.
+    if sptr == nullPtr
+      then pure Nothing
+      else fmap Just $ deRefStablePtr $ castPtrToStablePtr sptr
+
+-- | Gets a file handle from `C.FuseFileInfo`.
+--
+-- @
+-- getFHJust = fmap fromJust . `getFH`
+-- @
+--
+-- This means you must make sure that `getFH` returns @Just@ or you'll get a Haskell
+-- exception. /However/, it's deliberately made lazy so that calling `getFHJust` itself
+-- won't throw but trying to use the returned value will.
+--
+-- This function is implemented this way in order to take care of rare(?) cases in which
+-- `fuseRead`\/`fuseReaddir` is implemented but not `fuseOpen`\/`fuseOpendir` resp. is
+-- not. In such a case, `newFH` would not be called but only `getFH` would be. Without
+-- some protection, we would be dereferencing a non-initialized `StablePtr`, which is
+-- /undefined behavior/. Throwing a Haskell exception in a pure code is much better than
+-- UB. See the comment in the source of `getFH` if you are interested in more explanation.
+getFHJust :: Ptr C.FuseFileInfo -> IO fh
+getFHJust = fmap fromJust . getFH
 
 -- | Embeds a file handle into `C.FuseFileInfo`. It should be freed with `delFH` when no longer
 -- required.
