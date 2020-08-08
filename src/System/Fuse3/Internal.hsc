@@ -807,6 +807,7 @@ fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Er
 fuseRun prog args ops handler =
   catchIOError
     (withFuseArgs prog args $ \pArgs -> do
+      -- TODO don't parse the commandline arguments by ourselves to make --help work again
       cmd <- fuseParseCommandLine pArgs
       case cmd of
         Nothing -> fail ""
