@@ -346,7 +346,14 @@ data FuseOperations fh = FuseOperations
     -- TODO add notes about @default_permissions@ to other relevant handlers
     fuseAccess :: Maybe (FilePath -> AccessMode -> IO Errno)
 
-    -- TODO , create :: _
+  , -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@). Creates and opens a regular
+    -- file.
+    --
+    -- If this is not implemented, `fuseMknod` and `fuseOpen` methods will be called instead.
+    --
+    -- See `fuseOpen` for notes on the flags.
+    fuseCreate :: Maybe (FilePath -> OpenMode -> FileMode -> OpenFileFlags -> IO (Either Errno fh))
+
     -- TODO , lock :: _
 
   , -- | Implements @utimensat(2)@.
@@ -397,6 +404,7 @@ defaultFuseOps = FuseOperations
   , fuseInit = Nothing
   , fuseDestroy = Nothing
   , fuseAccess = Nothing
+  , fuseCreate = Nothing
   , fuseUtimens = Nothing
   }
 
@@ -449,6 +457,13 @@ withFuseArgs prog args f =
 --
 -- Each field of `FuseOperations` is converted into a C function pointer and is assigned
 -- to a corresponding field of @struct fuse_operations@.
+--
+-- The created `C.FuseOperations` has the following invariants:
+--
+--   - The content of @fuse_operations.fh@ is a Haskell value of type @StablePtr fh@. It
+--     is created with `newFH`, accessed with `getFH` and released with `delFH`.
+--
+--   - Every methods handle Haskell exception with the supplied error handler.
 withCFuseOperations
   :: forall fh e b
    . Exception e
@@ -484,6 +499,7 @@ withCFuseOperations ops handler cont =
     withC C.mkInit       wrapInit       (fuseInit ops)       $ (#poke struct fuse_operations, init) pOps >=> \_ ->
     withC C.mkDestroy    wrapDestroy    (fuseDestroy ops)    $ (#poke struct fuse_operations, destroy) pOps >=> \_ ->
     withC C.mkAccess     wrapAccess     (fuseAccess ops)     $ (#poke struct fuse_operations, access) pOps >=> \_ ->
+    withC C.mkCreate     wrapCreate     (fuseCreate ops)     $ (#poke struct fuse_operations, create) pOps >=> \_ ->
     withC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    $ (#poke struct fuse_operations, utimens) pOps >=> \_ ->
     cont pOps
   where
@@ -718,6 +734,28 @@ withCFuseOperations ops handler cont =
           (testBitSet mode (#const R_OK))
           (testBitSet mode (#const W_OK))
           (testBitSet mode (#const X_OK))
+
+  wrapCreate :: (FilePath -> OpenMode -> FileMode -> OpenFileFlags -> IO (Either Errno fh)) -> C.CCreate
+  wrapCreate go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
+    filePath <- peekFilePath pFilePath
+    -- TODO copy-pasted from wrapOpen
+    (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
+    let openFileFlags = OpenFileFlags
+          { append   = testBitSet flags (#const O_APPEND)
+          , nonBlock = testBitSet flags (#const O_NONBLOCK)
+          , trunc    = testBitSet flags (#const O_TRUNC)
+          , exclusive = False
+          , noctty    = False
+          }
+        openMode
+          | testBitSet flags (#const O_RDWR)   = ReadWrite
+          | testBitSet flags (#const O_WRONLY) = WriteOnly
+          | otherwise = ReadOnly -- O_RDONLY
+    go filePath openMode mode openFileFlags >>= \case
+      Left errno -> pure errno
+      Right fh -> do
+        newFH pFuseFileInfo fh
+        pure eOK
 
   wrapUtimens :: (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno) -> C.CUtimens
   wrapUtimens go pFilePath arrTs pFuseFileInfo = handleAsFuseError $ do
