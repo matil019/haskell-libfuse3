@@ -5,10 +5,12 @@ import CLoff
 import Control.Exception (SomeException, bracket, tryJust)
 import Data.ByteString (ByteString)
 import Data.Function (fix)
+import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Foreign (Ptr, allocaBytes, with)
 import Foreign.C (CInt(CInt), CSize(CSize), CUInt(CUInt), Errno(Errno), eIO, eOK, eOPNOTSUPP)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
+import System.Clock (TimeSpec)
 import System.Fuse3
 import System.IO (SeekMode, hPrint, stderr)
 import System.Linux.XAttr (lCreateXAttr, lGetXAttr, lListXAttr, lRemoveXAttr, lReplaceXAttr, lSetXAttr)
@@ -19,6 +21,7 @@ import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(F
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
+import qualified System.Clock as TimeSpec
 
 -- | Attempts to extract an `Errno` from an `IOError` assuming it is
 -- constructed with `errnoToIOError` (typically via `throwErrno`).
@@ -33,6 +36,9 @@ tryErrno = tryJust ioErrorToErrno
 
 tryErrno_ :: IO a -> IO Errno
 tryErrno_ = fmap (either id (const eOK)) . tryErrno
+
+timeSpecToPOSIXTime :: TimeSpec -> POSIXTime
+timeSpecToPOSIXTime ts = fromRational $ TimeSpec.toNanoSecs ts % 10^(9::Int)
 
 foreign import ccall "pread"
   c_pread :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
@@ -205,7 +211,7 @@ xmpOper = defaultFuseOps
   , fuseChmod         = Just $ \path _ mode -> xmpChmod path mode
   , fuseChown         = Just $ \path _ uid gid -> xmpChown path uid gid
   , fuseTruncate      = Just xmpTruncate
-  -- , fuseUtimens       = Just xmpUtimens
+  , fuseUtimens       = Just $ \path _ atime mtime -> xmpUtimens path (timeSpecToPOSIXTime atime) (timeSpecToPOSIXTime mtime)
   , fuseOpen          = Just xmpOpen
   -- , fuseCreate        = Just xmpCreate
   , fuseRead          = Just $ \_ -> xmpRead

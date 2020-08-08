@@ -59,6 +59,7 @@ import Foreign
   , nullFunPtr
   , nullPtr
   , peek
+  , peekArray
   , peekByteOff
   , poke
   , pokeByteOff
@@ -69,6 +70,7 @@ import Foreign
   )
 import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
+import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
 import System.Fuse3.FileStat (FileStat)
@@ -238,8 +240,9 @@ data FuseOperations fh = FuseOperations
   , -- | Implements 'System.Posix.Files.setOwnerAndGroup' (POSIX @chown(2)@).
     --
     -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-    -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
-    -- bits.
+    -- @Nothing@ even if it is open.
+    --
+    -- This method is expected to reset the setuid and setgid bits.
     --
     -- TODO FUSE_CAP_HANDLE_KILLPRIV?
     fuseChown :: Maybe (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno)
@@ -247,8 +250,9 @@ data FuseOperations fh = FuseOperations
   , -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
     --
     -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
-    -- @Nothing@ even if it is open. This method is expected to reset the setuid and setgid
-    -- bits.
+    -- @Nothing@ even if it is open.
+    --
+    -- This method is expected to reset the setuid and setgid bits.
     --
     -- TODO FUSE_CAP_HANDLE_KILLPRIV?
     fuseTruncate :: Maybe (FilePath -> Maybe fh -> FileOffset -> IO Errno)
@@ -344,7 +348,15 @@ data FuseOperations fh = FuseOperations
 
     -- TODO , create :: _
     -- TODO , lock :: _
-    -- TODO , utimens :: _
+
+  , -- | Implements @utimensat(2)@.
+    --
+    -- Changes the access and modification times of a file with nanosecond resolution.
+    --
+    -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
+    -- @Nothing@ even if it is open.
+    fuseUtimens :: Maybe (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno)
+
     -- TODO , bmap :: _
     -- TODO , ioctl :: _
     -- TODO , poll :: _
@@ -385,6 +397,7 @@ defaultFuseOps = FuseOperations
   , fuseInit = Nothing
   , fuseDestroy = Nothing
   , fuseAccess = Nothing
+  , fuseUtimens = Nothing
   }
 
 data FuseConfig = FuseConfig
@@ -471,6 +484,7 @@ withCFuseOperations ops handler cont =
     withC C.mkInit       wrapInit       (fuseInit ops)       $ (#poke struct fuse_operations, init) pOps >=> \_ ->
     withC C.mkDestroy    wrapDestroy    (fuseDestroy ops)    $ (#poke struct fuse_operations, destroy) pOps >=> \_ ->
     withC C.mkAccess     wrapAccess     (fuseAccess ops)     $ (#poke struct fuse_operations, access) pOps >=> \_ ->
+    withC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    $ (#poke struct fuse_operations, utimens) pOps >=> \_ ->
     cont pOps
   where
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and loan it to a continuation
@@ -704,6 +718,13 @@ withCFuseOperations ops handler cont =
           (testBitSet mode (#const R_OK))
           (testBitSet mode (#const W_OK))
           (testBitSet mode (#const X_OK))
+
+  wrapUtimens :: (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno) -> C.CUtimens
+  wrapUtimens go pFilePath arrTs pFuseFileInfo = handleAsFuseError $ do
+    filePath <- peekFilePath pFilePath
+    mfh <- maybePeek getFH pFuseFileInfo
+    [atime, mtime] <- peekArray 2 arrTs
+    go filePath mfh atime mtime
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about.

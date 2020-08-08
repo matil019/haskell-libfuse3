@@ -54,6 +54,7 @@ executable passthrough
   -- other-extensions:
   build-depends:       fuse3, base
                      , bytestring
+                     , clock
                      , linux-xattr
                      , time
                      , unix
