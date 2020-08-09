@@ -42,7 +42,7 @@ module System.Fuse3.Internal where
 import System.Fuse3.Internal.Resource
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
-import Control.Monad ((>=>), unless, void)
+import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Bits ((.&.), (.|.), Bits)
@@ -52,7 +52,6 @@ import Foreign
   ( FunPtr
   , Ptr
   , allocaBytes
-  , callocBytes
   , castPtrToStablePtr
   , castStablePtrToPtr
   , copyArray
@@ -70,10 +69,8 @@ import Foreign
   , pokeByteOff
   , pokeElemOff
   , with
-  , withArray
-  , withMany
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -81,12 +78,11 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
-import System.IO.Error (catchIOError)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
-import System.Posix.Process (createSession, exitImmediately, forkProcess)
+import System.Posix.Process (createSession)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
 import Text.Printf (hPrintf, printf)
 
@@ -832,18 +828,13 @@ fuseParseCommandLine pArgs =
 fuseParseCommandLineOrExit :: Ptr C.FuseArgs -> IO FuseMainArgs
 fuseParseCommandLineOrExit pArgs = either exitWith pure =<< fuseParseCommandLine pArgs
 
--- TODO or rather, @fuse_daemonize@?
--- | Haskell version of @daemon(2)@
+-- | Haskell version of @fuse_daemonize@
 --
 -- Mimics @daemon()@'s use of @_exit()@ instead of @exit()@; we depend on this in
 -- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground process exits.
-daemon :: IO a -> IO b
-daemon io = do
-  _ <- forkProcess (d `catchIOError` const exitFailure)
-  exitImmediately ExitSuccess
-  error "This is unreachable code"
-  where
-  d = do
+fuseDaemonize :: ResourceT IO a -> ResourceT IO b
+fuseDaemonize job = daemonizeResourceT $ do
+  liftIO $ do
     _ <- createSession
     changeWorkingDirectory "/"
     -- need to open @/dev/null@ twice because `hDuplicateTo` can't dup a
@@ -853,8 +844,8 @@ daemon io = do
       hDuplicateTo devNullOut stderr
     withFile "/dev/null" ReadMode $ \devNullIn -> do
       hDuplicateTo devNullIn stdin
-    _ <- io
-    exitSuccess
+  _ <- job
+  liftIO $ exitSuccess
 
 -- | @withSignalHandlers handler io@ installs signal handlers while @io@ is executed.
 withSignalHandlers :: IO () -> IO a -> IO a
@@ -878,18 +869,15 @@ type FuseMainArgs = (Bool, String) -- (foreground, mountpoint)
 fuseMainReal
   :: Ptr C.StructFuse
   -> FuseMainArgs
-  -> IO b              -- ^ An action to run after unmount
-  -> IO a              -- ^ Never returns because it may fork
-fuseMainReal = \pFuse (foreground, mountPt) after ->
+  -> ResourceT IO a
+fuseMainReal = \pFuse (foreground, mountPt) -> do
   let run = if foreground
-        then (changeWorkingDirectory "/" >>)
-        else daemon
-  in withFilePath mountPt $ \cMountPt -> do
-       -- TODO handle failure! (return value /= 0) throw? return Left?
-       _ <- C.fuse_mount pFuse cMountPt
-       run $ procMain pFuse `finally` do
-         C.fuse_unmount pFuse
-         after
+        then \io -> liftIO $ changeWorkingDirectory "/" >> io
+        else fuseDaemonize . liftIO
+  cMountPt <- fmap snd $ resNewFilePath mountPt
+  -- TODO handle failure! (return value /= 0) throw? return Left?
+  _ <- Res.allocate (C.fuse_mount pFuse cMountPt) (\_ -> C.fuse_unmount pFuse)
+  run $ procMain pFuse
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
@@ -912,11 +900,9 @@ fuseRun prog args ops handler = runResourceT $ do
   pFuse <- fmap snd $ Res.allocate
     (C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr)
     C.fuse_destroy
-  -- TODO fuseMainReal -> ResourceT
-  liftIO $ do
-    if pFuse == nullPtr
-      then exitFailure -- fuse_new prints an error message
-      else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse
+  if pFuse == nullPtr
+    then liftIO exitFailure -- fuse_new prints an error message
+    else fuseMainReal pFuse mainArgs
 
 -- | Main function of FUSE.
 --

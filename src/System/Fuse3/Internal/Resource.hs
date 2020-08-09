@@ -42,5 +42,8 @@ resNew a = allocate (new a) free
 resNewCString :: String -> ResourceT IO (ReleaseKey, CString)
 resNewCString s = allocate (newCString s) free
 
+resNewFilePath :: FilePath -> ResourceT IO (ReleaseKey, CString)
+resNewFilePath = _
+
 resNewArray :: Storable a => [a] -> ResourceT IO (ReleaseKey, Ptr a)
 resNewArray = _
