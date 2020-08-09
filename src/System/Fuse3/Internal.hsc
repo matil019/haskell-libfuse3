@@ -38,9 +38,6 @@ SUCH DAMAGE.
 -}
 module System.Fuse3.Internal where
 
--- TODO no all-in imports
-import System.Fuse3.Internal.Resource
-
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
@@ -75,6 +72,7 @@ import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess, exitWith)
+import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
