@@ -224,32 +224,47 @@ data FuseSession -- struct fuse_session
 
 data StructFuse -- struct fuse
 
-foreign import ccall safe "fuse_mount"
-  fuse_mount :: Ptr StructFuse -> CString -> IO CInt
-
-foreign import ccall safe "fuse_unmount"
-  fuse_unmount :: Ptr StructFuse -> IO ()
-
-foreign import ccall safe "fuse_get_session"
-  fuse_get_session :: Ptr StructFuse -> IO (Ptr FuseSession)
-
-foreign import ccall safe "fuse_session_exit"
-  fuse_session_exit :: Ptr FuseSession -> IO ()
-
-foreign import ccall safe "fuse_parse_cmdline"
-  fuse_parse_cmdline :: Ptr FuseArgs -> Ptr FuseCmdlineOpts -> IO CInt
-
-foreign import ccall safe "fuse_new"
-  fuse_new :: Ptr FuseArgs -> Ptr FuseOperations -> CSize -> Ptr a -> IO (Ptr StructFuse)
+foreign import ccall safe "fuse_cmdline_help"
+  fuse_cmdline_help :: IO ()
 
 foreign import ccall safe "fuse_destroy"
   fuse_destroy :: Ptr StructFuse -> IO ()
 
-foreign import ccall safe "fuse_opt_free_args"
-  fuse_opt_free_args :: Ptr FuseArgs -> IO ()
+foreign import ccall safe "fuse_get_session"
+  fuse_get_session :: Ptr StructFuse -> IO (Ptr FuseSession)
+
+foreign import ccall safe "fuse_lib_help"
+  fuse_lib_help :: Ptr FuseArgs -> IO ()
 
 foreign import ccall safe "fuse_loop_mt_31"
   fuse_loop_mt_31 :: Ptr StructFuse -> CInt -> IO Int
+
+foreign import ccall safe "fuse_lowlevel_help"
+  fuse_lowlevel_help :: IO ()
+
+foreign import ccall safe "fuse_lowlevel_version"
+  fuse_lowlevel_version :: IO ()
+
+foreign import ccall safe "fuse_mount"
+  fuse_mount :: Ptr StructFuse -> CString -> IO CInt
+
+foreign import ccall safe "fuse_new"
+  fuse_new :: Ptr FuseArgs -> Ptr FuseOperations -> CSize -> Ptr a -> IO (Ptr StructFuse)
+
+foreign import ccall safe "fuse_opt_free_args"
+  fuse_opt_free_args :: Ptr FuseArgs -> IO ()
+
+foreign import ccall safe "fuse_parse_cmdline"
+  fuse_parse_cmdline :: Ptr FuseArgs -> Ptr FuseCmdlineOpts -> IO CInt
+
+foreign import ccall safe "fuse_pkgversion"
+  fuse_pkgversion :: IO CString
+
+foreign import ccall safe "fuse_session_exit"
+  fuse_session_exit :: Ptr FuseSession -> IO ()
+
+foreign import ccall safe "fuse_unmount"
+  fuse_unmount :: Ptr StructFuse -> IO ()
 
 -- TODO move to another module (along with withCFuseOperations?)
 type CGetattr = CString -> Ptr FileStat -> Ptr FuseFileInfo -> IO CInt

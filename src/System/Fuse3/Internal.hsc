@@ -39,9 +39,7 @@ SUCH DAMAGE.
 module System.Fuse3.Internal where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
-import Control.Monad ((>=>), unless, void, when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Except (runExceptT, throwE)
+import Control.Monad ((>=>), unless, void)
 import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
@@ -70,11 +68,11 @@ import Foreign
   , withArray
   , withMany
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
-import System.Exit (ExitCode(ExitSuccess), exitFailure, exitSuccess)
+import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess, exitWith)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
@@ -85,6 +83,7 @@ import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWri
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
 import System.Posix.Process (createSession, exitImmediately, forkProcess)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
+import Text.Printf (hPrintf, printf)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
@@ -787,23 +786,41 @@ withCFuseOperations ops handler cont =
 --
 -- The multithreaded runtime will be used regardless of the threading flag!
 -- See the comment in @fuse_session_exit@ for why.
-fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Either String FuseMainArgs)
+fuseParseCommandLine :: Ptr C.FuseArgs -> IO (Either ExitCode FuseMainArgs)
 fuseParseCommandLine pArgs =
-  allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> runExceptT $ do
-    retval <- liftIO $ C.fuse_parse_cmdline pArgs pOpts
-    when (retval /= 0) $
-      throwE "unknown error" -- TODO fallback to --help message
-    mountPoint <- do
-      pMountPoint <- liftIO $ (#peek struct fuse_cmdline_opts, mountpoint) pOpts
-      when (pMountPoint == nullPtr) $
-        throwE "unknown error" -- TODO fallback to --help message
-      liftIO $ do
-        a <- peekFilePath pMountPoint
-        -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
-        free pMountPoint
-        pure a
-    foreground <- liftIO $ (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
-    pure (foreground, mountPoint)
+  allocaBytes (#size struct fuse_cmdline_opts) $ \pOpts -> do
+    retval <- C.fuse_parse_cmdline pArgs pOpts
+    if retval /= 0
+      -- fuse_parse_cmdline prints an error message
+      then pure $ Left $ ExitFailure 1
+      else go pOpts
+  where
+  go pOpts = do
+    pMountPoint <- (#peek struct fuse_cmdline_opts, mountpoint) pOpts
+    showHelp    <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, show_help) pOpts
+    showVersion <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, show_version) pOpts
+    -- free fuse_cmdline_opts.mountpoint because it is allocated with realloc (see libfuse's examples)
+    let freeMountPoint = free pMountPoint
+    flip finally freeMountPoint $ case () of
+      _ | showHelp -> do
+            printf "usage: %s [options] <mountpoint>\n\n" =<< getProgName
+            C.fuse_cmdline_help
+            C.fuse_lib_help pArgs
+            pure $ Left ExitSuccess
+        | showVersion -> do
+            ver <- peekCString =<< C.fuse_pkgversion
+            printf "FUSE library version %s\n" ver
+            C.fuse_lowlevel_version
+            pure $ Left ExitSuccess
+        | pMountPoint == nullPtr -> do
+            progName <- getProgName
+            hPrintf stderr "usage: %s [options] <mountpoint>\n" progName
+            hPrintf stderr "       %s --help\n" progName
+            pure $ Left $ ExitFailure 1
+        | otherwise -> do
+            mountPoint <- peekFilePath pMountPoint
+            foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
+            pure $ Right (foreground, mountPoint)
 
 -- TODO or rather, @fuse_daemonize@?
 -- | Haskell version of @daemon(2)@
@@ -883,7 +900,7 @@ fuseRun prog args ops handler =
       -- TODO don't parse the commandline arguments by ourselves to make --help work again
       cmd <- fuseParseCommandLine pArgs
       case cmd of
-        Left e -> fail e
+        Left e -> exitWith e
         Right mainArgs ->
           withCFuseOperations ops handler $ \pOp -> do
             let opSize = (#size struct fuse_operations)
