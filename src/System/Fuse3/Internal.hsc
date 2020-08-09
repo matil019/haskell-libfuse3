@@ -822,6 +822,9 @@ fuseParseCommandLine pArgs =
             foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
             pure $ Right (foreground, mountPoint)
 
+fuseParseCommandLineOrExit :: Ptr C.FuseArgs -> IO FuseMainArgs
+fuseParseCommandLineOrExit pArgs = either exitWith pure =<< fuseParseCommandLine pArgs
+
 -- TODO or rather, @fuse_daemonize@?
 -- | Haskell version of @daemon(2)@
 --
@@ -898,18 +901,12 @@ fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Er
 fuseRun prog args ops handler =
   catchIOError
     (withFuseArgs prog args $ \pArgs -> do
-      -- TODO don't parse the commandline arguments by ourselves to make --help work again
-      cmd <- fuseParseCommandLine pArgs
-      case cmd of
-        Left e -> exitWith e
-        Right mainArgs ->
-          withCFuseOperations ops handler $ \pOp -> do
-            let opSize = (#size struct fuse_operations)
-                privData = nullPtr
-            pFuse <- C.fuse_new pArgs pOp opSize privData
-            if pFuse == nullPtr
-              then exitFailure -- fuse_new prints an error message
-              else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse)
+      mainArgs <- fuseParseCommandLineOrExit pArgs
+      withCFuseOperations ops handler $ \pOp -> do
+        pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
+        if pFuse == nullPtr
+          then exitFailure -- fuse_new prints an error message
+          else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
