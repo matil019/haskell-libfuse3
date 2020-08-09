@@ -76,7 +76,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
-import System.IO.Error (catchIOError, ioeGetErrorString)
+import System.IO.Error (catchIOError)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
@@ -899,15 +899,13 @@ fuseMainReal = \pFuse (foreground, mountPt) after ->
 -- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO a
 fuseRun prog args ops handler =
-  catchIOError
-    (withFuseArgs prog args $ \pArgs -> do
-      mainArgs <- fuseParseCommandLineOrExit pArgs
-      withCFuseOperations ops handler $ \pOp -> do
-        pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
-        if pFuse == nullPtr
-          then exitFailure -- fuse_new prints an error message
-          else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse)
-    ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
+  withFuseArgs prog args $ \pArgs -> do
+    mainArgs <- fuseParseCommandLineOrExit pArgs
+    withCFuseOperations ops handler $ \pOp -> do
+      pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
+      if pFuse == nullPtr
+        then exitFailure -- fuse_new prints an error message
+        else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse
 
 -- | Main function of FUSE.
 --
