@@ -38,8 +38,13 @@ SUCH DAMAGE.
 -}
 module System.Fuse3.Internal where
 
+-- TODO no all-in imports
+import System.Fuse3.Internal.Resource
+
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
 import Control.Monad ((>=>), unless, void)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
@@ -85,6 +90,7 @@ import System.Posix.Process (createSession, exitImmediately, forkProcess)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
 import Text.Printf (hPrintf, printf)
 
+import qualified Control.Monad.Trans.Resource as Res
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
 import qualified System.Fuse3.Internal.C as C
@@ -445,19 +451,20 @@ fromCFuseConfig C.FuseConfig{..} = FuseConfig
   unCDouble (CDouble x) = x
 
 -- | Allocates a @fuse_args@ struct to hold commandline arguments.
-withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
-withFuseArgs prog args f =
+resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
+resFuseArgs prog args = do
   let allArgs = (prog:args)
       argc = length allArgs
-  in
-  withMany withCString allArgs $ \cArgs ->
-  withArray cArgs $ \pArgv ->
+  cArgs <- traverse (fmap snd . resNewCString) allArgs
+  pArgv <- fmap snd $ resNewArray cArgs
   -- TODO call FUSE_ARGS_INIT instead?
-  allocaBytes (#size struct fuse_args) $ \fuseArgs -> do
+  fuseArgs <- fmap snd $ resMallocBytes (#size struct fuse_args)
+  liftIO $ do
     (#poke struct fuse_args, argc) fuseArgs argc
     (#poke struct fuse_args, argv) fuseArgs pArgv
     (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
-    f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
+  _ <- Res.register $ C.fuse_opt_free_args fuseArgs
+  pure fuseArgs
 
 -- | Allocates a @fuse_operations@ struct and pokes `FuseOperations` into it.
 --
@@ -898,14 +905,15 @@ fuseMainReal = \pFuse (foreground, mountPt) after ->
 
 -- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO a
-fuseRun prog args ops handler =
-  withFuseArgs prog args $ \pArgs -> do
-    mainArgs <- fuseParseCommandLineOrExit pArgs
-    withCFuseOperations ops handler $ \pOp -> do
-      pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
-      if pFuse == nullPtr
-        then exitFailure -- fuse_new prints an error message
-        else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse
+fuseRun prog args ops handler = runResourceT $ do
+  pArgs <- resFuseArgs prog args
+  mainArgs <- liftIO $ fuseParseCommandLineOrExit pArgs
+  -- TODO withCFuseOperations -> resCFuseOperations
+  liftIO $ withCFuseOperations ops handler $ \pOp -> do
+    pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
+    if pFuse == nullPtr
+      then exitFailure -- fuse_new prints an error message
+      else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse
 
 -- | Main function of FUSE.
 --
