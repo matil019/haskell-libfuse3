@@ -870,13 +870,13 @@ fuseMainReal
   -> FuseMainArgs
   -> IO a
 fuseMainReal = \pFuse (foreground, mountPt) ->
-  let strategy = if foreground
-        then (>>) (changeWorkingDirectory "/") . procMain
-        else daemon . procMain
+  let run = if foreground
+        then (changeWorkingDirectory "/" >>)
+        else daemon
   in withFilePath mountPt $ \cMountPt -> do
        -- TODO handle failure! (return value /= 0) throw? return Left?
        _ <- C.fuse_mount pFuse cMountPt
-       strategy pFuse `finally` C.fuse_unmount pFuse
+       run $ procMain pFuse `finally` C.fuse_unmount pFuse
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
