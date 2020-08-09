@@ -881,11 +881,9 @@ fuseMainReal = \pFuse (foreground, mountPt) ->
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
     session <- C.fuse_get_session pFuse
-    -- calling fuse_session_exit to exit the main loop only appears to work
-    -- with the multithreaded fuse loop. In the single-threaded case, FUSE
-    -- depends on their recv() call to finish with EINTR when signals arrive.
-    -- This doesn't happen with GHC's signal handling in place.
-    -- TODO confirm this
+    -- TODO calling fuse_session_exit doesn't stop fuse_loop_mt_31!
+    -- @fusermount -u@ successfully kills the process but SIGINT doesn't
+    -- TODO try non-multithreaded loop
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt_31 pFuse 0 -- this 0 is @clone_fd@ argument TODO allow configuring this?
       if retVal == 0
