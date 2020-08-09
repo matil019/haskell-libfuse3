@@ -868,15 +868,18 @@ type FuseMainArgs = (Bool, String) -- (foreground, mountpoint)
 fuseMainReal
   :: Ptr C.StructFuse
   -> FuseMainArgs
-  -> IO a
-fuseMainReal = \pFuse (foreground, mountPt) ->
+  -> IO b              -- ^ An action to run after unmount
+  -> IO a              -- ^ Never returns because it may fork
+fuseMainReal = \pFuse (foreground, mountPt) after ->
   let run = if foreground
         then (changeWorkingDirectory "/" >>)
         else daemon
   in withFilePath mountPt $ \cMountPt -> do
        -- TODO handle failure! (return value /= 0) throw? return Left?
        _ <- C.fuse_mount pFuse cMountPt
-       run $ procMain pFuse `finally` C.fuse_unmount pFuse
+       run $ procMain pFuse `finally` do
+         C.fuse_unmount pFuse
+         after
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
@@ -903,11 +906,10 @@ fuseRun prog args ops handler =
           withCFuseOperations ops handler $ \pOp -> do
             let opSize = (#size struct fuse_operations)
                 privData = nullPtr
-            -- TODO fuse_new returns nullPtr on failure
-            -- but it's unlikely because fuseParseCommandLine already succeeded at this point
-            -- TODO dispose pFuse? (@fuse_destroy@)
             pFuse <- C.fuse_new pArgs pOp opSize privData
-            fuseMainReal pFuse mainArgs)
+            if pFuse == nullPtr
+              then exitFailure -- fuse_new prints an error message
+              else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse)
     ((\errStr -> unless (null errStr) (putStrLn errStr) >> exitFailure) . ioeGetErrorString)
 
 -- | Main function of FUSE.
