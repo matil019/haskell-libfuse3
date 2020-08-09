@@ -1,16 +1,15 @@
 -- | Utils related to @ResourceT@
 module System.Fuse3.Internal.Resource where
 
--- TODO no all-in imports
-import Control.Exception
-import Control.Monad.Trans.Resource
-import Control.Monad.Trans.Resource.Internal
-import Foreign
-import Foreign.C
-import System.Posix.Process
-
+import Control.Exception (catch, mask, throwIO)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Resource (ReleaseKey, ResourceT, allocate, getInternalState, runInternalState)
+import Control.Monad.Trans.Resource.Internal (stateCleanupChecked)
+import Foreign (Ptr, Storable, callocBytes, free, mallocBytes, new, newArray)
+import Foreign.C (CString, newCString)
 import System.Exit (ExitCode(ExitSuccess))
+import System.Posix.Internals (newFilePath)
+import System.Posix.Process (exitImmediately, forkProcess)
 
 -- | Forks a new process and transfers the resources to it.
 --
@@ -30,10 +29,10 @@ daemonizeResourceT res = do
     undefined
 
 resCallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
-resCallocBytes = _
+resCallocBytes n = allocate (callocBytes n) free
 
 resMallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
-resMallocBytes = _
+resMallocBytes n = allocate (mallocBytes n) free
 
 -- | Allocates a block of memory and marshals a value into it like `new`, associating `free` as a cleanup action.
 resNew :: Storable a => a -> ResourceT IO (ReleaseKey, Ptr a)
@@ -43,7 +42,7 @@ resNewCString :: String -> ResourceT IO (ReleaseKey, CString)
 resNewCString s = allocate (newCString s) free
 
 resNewFilePath :: FilePath -> ResourceT IO (ReleaseKey, CString)
-resNewFilePath = _
+resNewFilePath path = allocate (newFilePath path) free
 
 resNewArray :: Storable a => [a] -> ResourceT IO (ReleaseKey, Ptr a)
-resNewArray = _
+resNewArray as = allocate (newArray as) free
