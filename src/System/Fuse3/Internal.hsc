@@ -39,7 +39,9 @@ SUCH DAMAGE.
 module System.Fuse3.Internal where
 
 import Control.Exception (Exception, bracket, bracket_, finally, handle)
-import Control.Monad ((>=>), unless, void)
+import Control.Monad (unless, void)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
 import Data.Bits ((.&.), (.|.), Bits)
 import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
@@ -47,7 +49,6 @@ import Foreign
   ( FunPtr
   , Ptr
   , allocaBytes
-  , callocBytes
   , castPtrToStablePtr
   , castStablePtrToPtr
   , copyArray
@@ -65,26 +66,25 @@ import Foreign
   , pokeByteOff
   , pokeElemOff
   , with
-  , withArray
-  , withMany
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess, exitWith)
+import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
 import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
-import System.IO.Error (catchIOError)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
-import System.Posix.Process (createSession, exitImmediately, forkProcess)
+import System.Posix.Process (createSession)
 import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
 import Text.Printf (hPrintf, printf)
 
+import qualified Control.Monad.Trans.Resource as Res
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
 import qualified System.Fuse3.Internal.C as C
@@ -445,19 +445,20 @@ fromCFuseConfig C.FuseConfig{..} = FuseConfig
   unCDouble (CDouble x) = x
 
 -- | Allocates a @fuse_args@ struct to hold commandline arguments.
-withFuseArgs :: String -> [String] -> (Ptr C.FuseArgs -> IO b) -> IO b
-withFuseArgs prog args f =
+resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
+resFuseArgs prog args = do
   let allArgs = (prog:args)
       argc = length allArgs
-  in
-  withMany withCString allArgs $ \cArgs ->
-  withArray cArgs $ \pArgv ->
+  cArgs <- traverse (fmap snd . resNewCString) allArgs
+  pArgv <- fmap snd $ resNewArray cArgs
   -- TODO call FUSE_ARGS_INIT instead?
-  allocaBytes (#size struct fuse_args) $ \fuseArgs -> do
+  fuseArgs <- fmap snd $ resMallocBytes (#size struct fuse_args)
+  liftIO $ do
     (#poke struct fuse_args, argc) fuseArgs argc
     (#poke struct fuse_args, argv) fuseArgs pArgv
     (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
-    f fuseArgs `finally` C.fuse_opt_free_args fuseArgs
+  _ <- Res.register $ C.fuse_opt_free_args fuseArgs
+  pure fuseArgs
 
 -- | Allocates a @fuse_operations@ struct and pokes `FuseOperations` into it.
 --
@@ -470,49 +471,49 @@ withFuseArgs prog args f =
 --     is created with `newFH`, accessed with `getFH` and released with `delFH`.
 --
 --   - Every methods handle Haskell exception with the supplied error handler.
-withCFuseOperations
-  :: forall fh e b
+resCFuseOperations
+  :: forall fh e
    . Exception e
   => FuseOperations fh              -- ^ A set of file system operations.
   -> (e -> IO Errno)                -- ^ An error handler that converts a Haskell exception to @errno@.
-  -> (Ptr C.FuseOperations -> IO b) --
-  -> IO b
-withCFuseOperations ops handler cont =
-  bracket (callocBytes (#size struct fuse_operations)) free $ \pOps ->
-    withC C.mkGetattr    wrapGetattr    (fuseGetattr ops)    $ (#poke struct fuse_operations, getattr) pOps >=> \_ ->
-    withC C.mkReadlink   wrapReadlink   (fuseReadlink ops)   $ (#poke struct fuse_operations, readlink) pOps >=> \_ ->
-    withC C.mkMknod      wrapMknod      (fuseMknod ops)      $ (#poke struct fuse_operations, mknod) pOps >=> \_ ->
-    withC C.mkMkdir      wrapMkdir      (fuseMkdir ops)      $ (#poke struct fuse_operations, mkdir) pOps >=> \_ ->
-    withC C.mkUnlink     wrapUnlink     (fuseUnlink ops)     $ (#poke struct fuse_operations, unlink) pOps >=> \_ ->
-    withC C.mkRmdir      wrapRmdir      (fuseRmdir ops)      $ (#poke struct fuse_operations, rmdir) pOps >=> \_ ->
-    withC C.mkSymlink    wrapSymlink    (fuseSymlink ops)    $ (#poke struct fuse_operations, symlink) pOps >=> \_ ->
-    withC C.mkRename     wrapRename     (fuseRename ops)     $ (#poke struct fuse_operations, rename) pOps >=> \_ ->
-    withC C.mkLink       wrapLink       (fuseLink ops)       $ (#poke struct fuse_operations, link) pOps >=> \_ ->
-    withC C.mkChmod      wrapChmod      (fuseChmod ops)      $ (#poke struct fuse_operations, chmod) pOps >=> \_ ->
-    withC C.mkChown      wrapChown      (fuseChown ops)      $ (#poke struct fuse_operations, chown) pOps >=> \_ ->
-    withC C.mkTruncate   wrapTruncate   (fuseTruncate ops)   $ (#poke struct fuse_operations, truncate) pOps >=> \_ ->
-    withC C.mkOpen       wrapOpen       (fuseOpen ops)       $ (#poke struct fuse_operations, open) pOps >=> \_ ->
-    withC C.mkRead       wrapRead       (fuseRead ops)       $ (#poke struct fuse_operations, read) pOps >=> \_ ->
-    withC C.mkWrite      wrapWrite      (fuseWrite ops)      $ (#poke struct fuse_operations, write) pOps >=> \_ ->
-    withC C.mkStatfs     wrapStatfs     (fuseStatfs ops)     $ (#poke struct fuse_operations, statfs) pOps >=> \_ ->
-    withC C.mkFlush      wrapFlush      (fuseFlush ops)      $ (#poke struct fuse_operations, flush) pOps >=> \_ ->
-    withC C.mkRelease    wrapRelease    (fuseRelease ops)    $ (#poke struct fuse_operations, release) pOps >=> \_ ->
-    withC C.mkFsync      wrapFsync      (fuseFsync ops)      $ (#poke struct fuse_operations, fsync) pOps >=> \_ ->
-    withC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    $ (#poke struct fuse_operations, opendir) pOps >=> \_ ->
-    withC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    $ (#poke struct fuse_operations, readdir) pOps >=> \_ ->
-    withC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) $ (#poke struct fuse_operations, releasedir) pOps >=> \_ ->
-    withC C.mkFsyncdir   wrapFsyncdir   (fuseFsyncdir ops)   $ (#poke struct fuse_operations, fsyncdir) pOps >=> \_ ->
-    withC C.mkInit       wrapInit       (fuseInit ops)       $ (#poke struct fuse_operations, init) pOps >=> \_ ->
-    withC C.mkDestroy    wrapDestroy    (fuseDestroy ops)    $ (#poke struct fuse_operations, destroy) pOps >=> \_ ->
-    withC C.mkAccess     wrapAccess     (fuseAccess ops)     $ (#poke struct fuse_operations, access) pOps >=> \_ ->
-    withC C.mkCreate     wrapCreate     (fuseCreate ops)     $ (#poke struct fuse_operations, create) pOps >=> \_ ->
-    withC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    $ (#poke struct fuse_operations, utimens) pOps >=> \_ ->
-    withC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  $ (#poke struct fuse_operations, fallocate) pOps >=> \_ ->
-    cont pOps
+  -> ResourceT IO (Ptr C.FuseOperations)
+resCFuseOperations ops handler = do
+  pOps <- fmap snd $ resCallocBytes (#size struct fuse_operations)
+  resC C.mkGetattr    wrapGetattr    (fuseGetattr ops)    >>= liftIO . (#poke struct fuse_operations, getattr)    pOps
+  resC C.mkReadlink   wrapReadlink   (fuseReadlink ops)   >>= liftIO . (#poke struct fuse_operations, readlink)   pOps
+  resC C.mkMknod      wrapMknod      (fuseMknod ops)      >>= liftIO . (#poke struct fuse_operations, mknod)      pOps
+  resC C.mkMkdir      wrapMkdir      (fuseMkdir ops)      >>= liftIO . (#poke struct fuse_operations, mkdir)      pOps
+  resC C.mkUnlink     wrapUnlink     (fuseUnlink ops)     >>= liftIO . (#poke struct fuse_operations, unlink)     pOps
+  resC C.mkRmdir      wrapRmdir      (fuseRmdir ops)      >>= liftIO . (#poke struct fuse_operations, rmdir)      pOps
+  resC C.mkSymlink    wrapSymlink    (fuseSymlink ops)    >>= liftIO . (#poke struct fuse_operations, symlink)    pOps
+  resC C.mkRename     wrapRename     (fuseRename ops)     >>= liftIO . (#poke struct fuse_operations, rename)     pOps
+  resC C.mkLink       wrapLink       (fuseLink ops)       >>= liftIO . (#poke struct fuse_operations, link)       pOps
+  resC C.mkChmod      wrapChmod      (fuseChmod ops)      >>= liftIO . (#poke struct fuse_operations, chmod)      pOps
+  resC C.mkChown      wrapChown      (fuseChown ops)      >>= liftIO . (#poke struct fuse_operations, chown)      pOps
+  resC C.mkTruncate   wrapTruncate   (fuseTruncate ops)   >>= liftIO . (#poke struct fuse_operations, truncate)   pOps
+  resC C.mkOpen       wrapOpen       (fuseOpen ops)       >>= liftIO . (#poke struct fuse_operations, open)       pOps
+  resC C.mkRead       wrapRead       (fuseRead ops)       >>= liftIO . (#poke struct fuse_operations, read)       pOps
+  resC C.mkWrite      wrapWrite      (fuseWrite ops)      >>= liftIO . (#poke struct fuse_operations, write)      pOps
+  resC C.mkStatfs     wrapStatfs     (fuseStatfs ops)     >>= liftIO . (#poke struct fuse_operations, statfs)     pOps
+  resC C.mkFlush      wrapFlush      (fuseFlush ops)      >>= liftIO . (#poke struct fuse_operations, flush)      pOps
+  resC C.mkRelease    wrapRelease    (fuseRelease ops)    >>= liftIO . (#poke struct fuse_operations, release)    pOps
+  resC C.mkFsync      wrapFsync      (fuseFsync ops)      >>= liftIO . (#poke struct fuse_operations, fsync)      pOps
+  resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
+  resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
+  resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
+  resC C.mkFsyncdir   wrapFsyncdir   (fuseFsyncdir ops)   >>= liftIO . (#poke struct fuse_operations, fsyncdir)   pOps
+  resC C.mkInit       wrapInit       (fuseInit ops)       >>= liftIO . (#poke struct fuse_operations, init)       pOps
+  resC C.mkDestroy    wrapDestroy    (fuseDestroy ops)    >>= liftIO . (#poke struct fuse_operations, destroy)    pOps
+  resC C.mkAccess     wrapAccess     (fuseAccess ops)     >>= liftIO . (#poke struct fuse_operations, access)     pOps
+  resC C.mkCreate     wrapCreate     (fuseCreate ops)     >>= liftIO . (#poke struct fuse_operations, create)     pOps
+  resC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    >>= liftIO . (#poke struct fuse_operations, utimens)    pOps
+  resC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  >>= liftIO . (#poke struct fuse_operations, fallocate)  pOps
+  pure pOps
   where
-  -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and loan it to a continuation
-  withC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> (FunPtr cfunc -> IO c) -> IO c
-  withC mkMeth wrapMeth = maybeWithFun (withHaskellFunPtr mkMeth . wrapMeth)
+  -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
+  resC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> ResourceT IO (FunPtr cfunc)
+  resC _ _ Nothing = pure nullFunPtr
+  resC mkMeth wrapMeth (Just hsfunc) = fmap snd $ Res.allocate (mkMeth $ wrapMeth hsfunc) freeHaskellFunPtr
 
   -- return negated errno as specified by fuse.h. also handle any Haskell exceptions
   handleAsFuseError :: IO Errno -> IO CInt
@@ -825,18 +826,13 @@ fuseParseCommandLine pArgs =
 fuseParseCommandLineOrExit :: Ptr C.FuseArgs -> IO FuseMainArgs
 fuseParseCommandLineOrExit pArgs = either exitWith pure =<< fuseParseCommandLine pArgs
 
--- TODO or rather, @fuse_daemonize@?
--- | Haskell version of @daemon(2)@
+-- | Haskell version of @fuse_daemonize@
 --
 -- Mimics @daemon()@'s use of @_exit()@ instead of @exit()@; we depend on this in
 -- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground process exits.
-daemon :: IO a -> IO b
-daemon io = do
-  _ <- forkProcess (d `catchIOError` const exitFailure)
-  exitImmediately ExitSuccess
-  error "This is unreachable code"
-  where
-  d = do
+fuseDaemonize :: ResourceT IO a -> ResourceT IO b
+fuseDaemonize job = daemonizeResourceT $ do
+  liftIO $ do
     _ <- createSession
     changeWorkingDirectory "/"
     -- need to open @/dev/null@ twice because `hDuplicateTo` can't dup a
@@ -846,8 +842,8 @@ daemon io = do
       hDuplicateTo devNullOut stderr
     withFile "/dev/null" ReadMode $ \devNullIn -> do
       hDuplicateTo devNullIn stdin
-    _ <- io
-    exitSuccess
+  _ <- job
+  liftIO $ exitSuccess
 
 -- | @withSignalHandlers handler io@ installs signal handlers while @io@ is executed.
 withSignalHandlers :: IO () -> IO a -> IO a
@@ -871,18 +867,15 @@ type FuseMainArgs = (Bool, String) -- (foreground, mountpoint)
 fuseMainReal
   :: Ptr C.StructFuse
   -> FuseMainArgs
-  -> IO b              -- ^ An action to run after unmount
-  -> IO a              -- ^ Never returns because it may fork
-fuseMainReal = \pFuse (foreground, mountPt) after ->
+  -> ResourceT IO a
+fuseMainReal = \pFuse (foreground, mountPt) -> do
   let run = if foreground
-        then (changeWorkingDirectory "/" >>)
-        else daemon
-  in withFilePath mountPt $ \cMountPt -> do
-       -- TODO handle failure! (return value /= 0) throw? return Left?
-       _ <- C.fuse_mount pFuse cMountPt
-       run $ procMain pFuse `finally` do
-         C.fuse_unmount pFuse
-         after
+        then \io -> liftIO $ changeWorkingDirectory "/" >> io
+        else fuseDaemonize . liftIO
+  cMountPt <- fmap snd $ resNewFilePath mountPt
+  -- TODO handle failure! (return value /= 0) throw? return Left?
+  _ <- Res.allocate (C.fuse_mount pFuse cMountPt) (\_ -> C.fuse_unmount pFuse)
+  run $ procMain pFuse
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
@@ -898,14 +891,16 @@ fuseMainReal = \pFuse (foreground, mountPt) after ->
 
 -- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO a
-fuseRun prog args ops handler =
-  withFuseArgs prog args $ \pArgs -> do
-    mainArgs <- fuseParseCommandLineOrExit pArgs
-    withCFuseOperations ops handler $ \pOp -> do
-      pFuse <- C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr
-      if pFuse == nullPtr
-        then exitFailure -- fuse_new prints an error message
-        else fuseMainReal pFuse mainArgs $ C.fuse_destroy pFuse
+fuseRun prog args ops handler = runResourceT $ do
+  pArgs <- resFuseArgs prog args
+  mainArgs <- liftIO $ fuseParseCommandLineOrExit pArgs
+  pOp <- resCFuseOperations ops handler
+  pFuse <- fmap snd $ Res.allocate
+    (C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr)
+    C.fuse_destroy
+  if pFuse == nullPtr
+    then liftIO exitFailure -- fuse_new prints an error message
+    else fuseMainReal pFuse mainArgs
 
 -- | Main function of FUSE.
 --
