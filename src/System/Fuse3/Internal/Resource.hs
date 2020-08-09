@@ -7,6 +7,9 @@ import Control.Monad.Trans.Resource.Internal
 import Foreign
 import Foreign.C
 
+resCallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
+resCallocBytes = _
+
 resMallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
 resMallocBytes = _
 
