@@ -894,7 +894,7 @@ fuseMainReal = \pFuse (foreground, mountPt) after ->
         else exitFailure
 
 -- | Parses the commandline arguments and runs fuse.
-fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO ()
+fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO a
 fuseRun prog args ops handler =
   catchIOError
     (withFuseArgs prog args $ \pArgs -> do
