@@ -7,6 +7,7 @@ import Data.ByteString (ByteString)
 import Data.Function (fix)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
+import Data.Void (Void)
 import Foreign (Ptr, allocaBytes, with)
 import Foreign.C (CInt(CInt), CSize(CSize), CUInt(CUInt), Errno(Errno), eIO, eOK, eOPNOTSUPP)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
@@ -194,7 +195,7 @@ xmpCopyFileRange (Fd fdIn) offIn (Fd fdOut) offOut len =
 xmpLseek :: Fd -> SeekMode -> FileOffset -> IO (Either Errno FileOffset)
 xmpLseek fd mode offset = tryErrno $ fdSeek fd mode offset
 
-xmpOper :: FuseOperations Fd
+xmpOper :: FuseOperations Fd Void
 xmpOper = defaultFuseOps
   { fuseInit          = Just xmpInit
   , fuseGetattr       = Just $ \path _ -> xmpGetattr path

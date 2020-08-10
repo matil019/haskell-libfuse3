@@ -190,11 +190,12 @@ testBitSet bits mask = bits .&. mask == mask
 --
 -- Each field is named against @struct fuse_operations@ in @fuse.h@.
 --
--- @fh@ is the file handle type returned by `fuseOpen` and `fuseOpendir`, and
--- subsequently passed to all other file operations.
+-- @fh@ is the file handle type returned by `fuseOpen`, and subsequently passed to all
+-- other file operations.
 --
--- TODO distinguish file handle and directory handle? (with Either?)
-data FuseOperations fh = FuseOperations
+-- @dh@ is the directory handle type returned by `fuseOpendir`, and subsequently passed to
+-- `fuseReaddir` and `fuseReleasedir`.
+data FuseOperations fh dh = FuseOperations
   { -- | Implements 'System.Posix.Files.getSymbolicLinkStatus' operation (POSIX @lstat(2)@).
     --
     -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
@@ -314,19 +315,19 @@ data FuseOperations fh = FuseOperations
   , -- | Implements @opendir(3)@.
     --
     -- This method should check if the open operation is permitted for this directory.
-    fuseOpendir :: Maybe (FilePath -> IO (Either Errno fh))
+    fuseOpendir :: Maybe (FilePath -> IO (Either Errno dh))
 
   , -- | Implements @readdir(3)@.
     --
     -- The entire contents of the directory should be returned as a list of tuples
     -- (corresponding to the first mode of operation documented in @fuse.h@).
-    fuseReaddir :: Maybe (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)]))
+    fuseReaddir :: Maybe (FilePath -> dh -> IO (Either Errno [(FilePath, FileStat)]))
 
   , -- | Implements @closedir(3)@.
-    fuseReleasedir :: Maybe (FilePath -> fh -> IO Errno)
+    fuseReleasedir :: Maybe (FilePath -> dh -> IO Errno)
 
   , -- | Synchronize the directory's contents; analogous to `fuseFsync`.
-    fuseFsyncdir :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
+    fuseFsyncdir :: Maybe (FilePath -> dh -> SyncType -> IO Errno)
 
   , -- | Initializes the filesystem.  This is called before all other operations.
     --
@@ -381,7 +382,7 @@ data FuseOperations fh = FuseOperations
   }
 
 -- | An empty set of operations whose fields are @Nothing@.
-defaultFuseOps :: FuseOperations fh
+defaultFuseOps :: FuseOperations fh dh
 defaultFuseOps = FuseOperations
   { fuseGetattr = Nothing
   , fuseReadlink = Nothing
@@ -472,9 +473,9 @@ resFuseArgs prog args = do
 --
 --   - Every methods handle Haskell exception with the supplied error handler.
 resCFuseOperations
-  :: forall fh e
+  :: forall fh dh e
    . Exception e
-  => FuseOperations fh              -- ^ A set of file system operations.
+  => FuseOperations fh dh           -- ^ A set of file system operations.
   -> (e -> IO Errno)                -- ^ An error handler that converts a Haskell exception to @errno@.
   -> ResourceT IO (Ptr C.FuseOperations)
 resCFuseOperations ops handler = do
@@ -672,19 +673,19 @@ resCFuseOperations ops handler = do
     fh <- getFHJust pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
-  wrapOpendir :: (FilePath -> IO (Either Errno fh)) -> C.COpendir
+  wrapOpendir :: (FilePath -> IO (Either Errno dh)) -> C.COpendir
   wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
     go filePath >>= \case
       Left errno -> pure errno
-      Right fh -> do
-        newFH pFuseFileInfo fh
+      Right dh -> do
+        newFH pFuseFileInfo dh
         pure eOK
 
-  wrapReaddir :: (FilePath -> fh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
+  wrapReaddir :: (FilePath -> dh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFHJust pFuseFileInfo
+    dh <- getFHJust pFuseFileInfo
     let fillDir = mkFillDir pFillDir
         fillEntry :: (FilePath, FileStat) -> IO ()
         fillEntry (fileName, fileStat) =
@@ -692,25 +693,25 @@ resCFuseOperations ops handler = do
           with fileStat $ \pFileStat -> do
             _ <- fillDir pBuf pFileName pFileStat 0 0
             pure ()
-    go filePath fh >>= \case
+    go filePath dh >>= \case
       Left errno -> pure errno
       Right entries -> do
         traverse_ fillEntry entries
         pure eOK
 
-  wrapReleasedir :: (FilePath -> fh -> IO Errno) -> C.CReleasedir
+  wrapReleasedir :: (FilePath -> dh -> IO Errno) -> C.CReleasedir
   wrapReleasedir go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
     go' = handleAsFuseError $ do
       filePath <- peekFilePath pFilePath
-      fh <- getFHJust pFuseFileInfo
-      go filePath fh
+      dh <- getFHJust pFuseFileInfo
+      go filePath dh
 
-  wrapFsyncdir :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsyncdir
+  wrapFsyncdir :: (FilePath -> dh -> SyncType -> IO Errno) -> C.CFsyncdir
   wrapFsyncdir go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    fh <- getFHJust pFuseFileInfo
-    go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
+    dh <- getFHJust pFuseFileInfo
+    go filePath dh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapInit :: (FuseConfig -> IO FuseConfig) -> C.CInit
   -- TODO HFuse used `defaultExceptionHandler` instead of handler
@@ -890,7 +891,7 @@ fuseMainReal = \pFuse (foreground, mountPt) -> do
         else exitFailure
 
 -- | Parses the commandline arguments and runs fuse.
-fuseRun :: Exception e => String -> [String] -> FuseOperations fh -> (e -> IO Errno) -> IO a
+fuseRun :: Exception e => String -> [String] -> FuseOperations fh dh -> (e -> IO Errno) -> IO a
 fuseRun prog args ops handler = runResourceT $ do
   pArgs <- resFuseArgs prog args
   mainArgs <- liftIO $ fuseParseCommandLineOrExit pArgs
@@ -926,7 +927,7 @@ fuseRun prog args ops handler = runResourceT $ do
 --   * registers the operations ;
 --
 --   * calls FUSE event loop.
-fuseMain :: Exception e => FuseOperations fh -> (e -> IO Errno) -> IO ()
+fuseMain :: Exception e => FuseOperations fh dh -> (e -> IO Errno) -> IO ()
 fuseMain ops handler = do
   -- this used to be implemented using libfuse's fuse_main. Doing this will fork()
   -- from C behind the GHC runtime's back, which deadlocks in GHC 6.8.
