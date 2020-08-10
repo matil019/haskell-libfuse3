@@ -316,7 +316,11 @@ data FuseOperations fh dh = FuseOperations
     -- The parameters are path, name, value and flags.
     fuseSetxattr :: Maybe (FilePath -> String -> B.ByteString -> SetxattrFlag -> IO Errno)
 
-    -- TODO , getxattr :: _
+  , -- | Implements @getxattr(2)@.
+    --
+    -- The parameters are path and name.
+    fuseGetxattr :: Maybe (FilePath -> String -> IO (Either Errno B.ByteString))
+
     -- TODO , listxattr :: _
     -- TODO , removexattr :: _
 
@@ -412,6 +416,7 @@ defaultFuseOps = FuseOperations
   , fuseRelease = Nothing
   , fuseFsync = Nothing
   , fuseSetxattr = Nothing
+  , fuseGetxattr = Nothing
   , fuseOpendir = Nothing
   , fuseReaddir = Nothing
   , fuseReleasedir = Nothing
@@ -509,6 +514,7 @@ resCFuseOperations ops handler = do
   resC C.mkRelease    wrapRelease    (fuseRelease ops)    >>= liftIO . (#poke struct fuse_operations, release)    pOps
   resC C.mkFsync      wrapFsync      (fuseFsync ops)      >>= liftIO . (#poke struct fuse_operations, fsync)      pOps
   resC C.mkSetxattr   wrapSetxattr   (fuseSetxattr ops)   >>= liftIO . (#poke struct fuse_operations, setxattr)   pOps
+  resC C.mkGetxattr   wrapGetxattr   (fuseGetxattr ops)   >>= liftIO . (#poke struct fuse_operations, getxattr)   pOps
   resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
   resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
   resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
@@ -695,6 +701,19 @@ resCFuseOperations ops handler = do
           (#const XATTR_REPLACE) -> Right SetxattrReplace
           _ -> Left eINVAL
     either pure (go filePath name value) eflag
+
+  wrapGetxattr :: (FilePath -> String -> IO (Either Errno B.ByteString)) -> C.CGetxattr
+  wrapGetxattr go pFilePath pName pValueBuf bufSize = handleAsFuseErrorResult $ do
+    filePath <- peekFilePath pFilePath
+    name <- peekCString pName
+    go filePath name >>= \case
+      Left errno -> pure $ Left errno
+      Right bytes
+        | bufSize == 0 -> pure $ Right $ fromIntegral $ B.length bytes
+        | otherwise -> BU.unsafeUseAsCStringLen bytes $ \(pBytes, bytesLen) -> do
+            let len = bytesLen `min` fromIntegral bufSize
+            copyArray pValueBuf pBytes len
+            pure $ Right $ fromIntegral len
 
   wrapOpendir :: (FilePath -> IO (Either Errno dh)) -> C.COpendir
   wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
