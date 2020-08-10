@@ -1051,9 +1051,9 @@ getFH pFuseFileInfo
 -- won't throw but trying to use the returned value will.
 --
 -- This function is implemented this way in order to take care of rare(?) cases in which
--- `fuseRead`\/`fuseReaddir` is implemented but not `fuseOpen`\/`fuseOpendir` resp. is
--- not. In such a case, `newFH` would not be called but only `getFH` would be. Without
--- some protection, we would be dereferencing a non-initialized `StablePtr`, which is
+-- `fuseRead`\/`fuseReaddir` is implemented but not `fuseOpen`\/`fuseOpendir` resp. In
+-- such a case, `newFH` would not be called but only `getFH` would be. Without some
+-- protection, we would be dereferencing a non-initialized `StablePtr`, which is
 -- /undefined behavior/. Throwing a Haskell exception in a pure code is much better than
 -- UB. See the comment in the source of `getFH` if you are interested in more explanation.
 getFHJust :: Ptr C.FuseFileInfo -> IO fh
