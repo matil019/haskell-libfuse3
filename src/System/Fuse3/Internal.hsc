@@ -321,7 +321,9 @@ data FuseOperations fh dh = FuseOperations
     -- The parameters are path and name.
     fuseGetxattr :: Maybe (FilePath -> String -> IO (Either Errno B.ByteString))
 
-    -- TODO , listxattr :: _
+  , -- | Implements @listxattr(2)@.
+    fuseListxattr :: Maybe (FilePath -> IO (Either Errno [String]))
+
     -- TODO , removexattr :: _
 
   , -- | Implements @opendir(3)@.
@@ -417,6 +419,7 @@ defaultFuseOps = FuseOperations
   , fuseFsync = Nothing
   , fuseSetxattr = Nothing
   , fuseGetxattr = Nothing
+  , fuseListxattr = Nothing
   , fuseOpendir = Nothing
   , fuseReaddir = Nothing
   , fuseReleasedir = Nothing
@@ -515,6 +518,7 @@ resCFuseOperations ops handler = do
   resC C.mkFsync      wrapFsync      (fuseFsync ops)      >>= liftIO . (#poke struct fuse_operations, fsync)      pOps
   resC C.mkSetxattr   wrapSetxattr   (fuseSetxattr ops)   >>= liftIO . (#poke struct fuse_operations, setxattr)   pOps
   resC C.mkGetxattr   wrapGetxattr   (fuseGetxattr ops)   >>= liftIO . (#poke struct fuse_operations, getxattr)   pOps
+  resC C.mkListxattr  wrapListxattr  (fuseListxattr ops)  >>= liftIO . (#poke struct fuse_operations, listxattr)  pOps
   resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
   resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
   resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
@@ -713,6 +717,19 @@ resCFuseOperations ops handler = do
         | otherwise -> BU.unsafeUseAsCStringLen bytes $ \(pBytes, bytesLen) -> do
             let len = bytesLen `min` fromIntegral bufSize
             copyArray pValueBuf pBytes len
+            pure $ Right $ fromIntegral len
+
+  wrapListxattr :: (FilePath -> IO (Either Errno [String])) -> C.CListxattr
+  wrapListxattr go pFilePath pBuf bufSize = handleAsFuseErrorResult $ do
+    filePath <- peekFilePath pFilePath
+    go filePath >>= \case
+      Left errno -> pure $ Left errno
+      Right names -> withCStringLen (concatMap (<> "\0") names) $ \(pNames, namesLen) ->
+        if bufSize == 0
+          then pure $ Right $ fromIntegral namesLen
+          else do
+            let len = namesLen `min` fromIntegral bufSize
+            copyArray pBuf pNames len
             pure $ Right $ fromIntegral len
 
   wrapOpendir :: (FilePath -> IO (Either Errno dh)) -> C.COpendir
