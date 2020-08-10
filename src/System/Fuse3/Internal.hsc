@@ -67,7 +67,7 @@ import Foreign
   , pokeElemOff
   , with
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eOK, getErrno, peekCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eINVAL, eOK, getErrno, peekCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -93,6 +93,7 @@ import qualified System.Posix.Signals as Signals
 
 #include <fuse.h>
 #include <fuse_lowlevel.h>
+#include <sys/xattr.h>
 
 -- | The Unix type of a node in the filesystem.
 data EntryType
@@ -149,8 +150,11 @@ data AccessMode
 
 -- | Passed to `fuseSetxattr`.
 data SetxattrFlag
+  -- | Create a new attribute if it does not exist, or replace the value if it already exists (@0@)
   = SetxattrDefault
+  -- | Perform a pure create, which fails if the named attribute exists already (@XATTR_CREATE@)
   | SetxattrCreate
+  -- | Perform a pure replace operation, which fails if the named attribute does not already exist (@XATTR_REPLACE@)
   | SetxattrReplace
   deriving (Eq, Show)
 
@@ -185,7 +189,7 @@ access path mode = withFilePath path $ \cPath -> do
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
 
--- memo: when adding a new field, make sure to update withCFuseOperations
+-- memo: when adding a new field, make sure to update resCFuseOperations
 -- | The file system operations.
 --
 -- Each field is named against @struct fuse_operations@ in @fuse.h@.
@@ -307,7 +311,11 @@ data FuseOperations fh dh = FuseOperations
   , -- | Implements @fsync(2)@.
     fuseFsync :: Maybe (FilePath -> fh -> SyncType -> IO Errno)
 
-    -- TODO , setxattr :: _
+  , -- | Implements @setxattr(2)@.
+    --
+    -- The parameters are path, name, value and flags.
+    fuseSetxattr :: Maybe (FilePath -> String -> B.ByteString -> SetxattrFlag -> IO Errno)
+
     -- TODO , getxattr :: _
     -- TODO , listxattr :: _
     -- TODO , removexattr :: _
@@ -403,6 +411,7 @@ defaultFuseOps = FuseOperations
   , fuseFlush = Nothing
   , fuseRelease = Nothing
   , fuseFsync = Nothing
+  , fuseSetxattr = Nothing
   , fuseOpendir = Nothing
   , fuseReaddir = Nothing
   , fuseReleasedir = Nothing
@@ -499,6 +508,7 @@ resCFuseOperations ops handler = do
   resC C.mkFlush      wrapFlush      (fuseFlush ops)      >>= liftIO . (#poke struct fuse_operations, flush)      pOps
   resC C.mkRelease    wrapRelease    (fuseRelease ops)    >>= liftIO . (#poke struct fuse_operations, release)    pOps
   resC C.mkFsync      wrapFsync      (fuseFsync ops)      >>= liftIO . (#poke struct fuse_operations, fsync)      pOps
+  resC C.mkSetxattr   wrapSetxattr   (fuseSetxattr ops)   >>= liftIO . (#poke struct fuse_operations, setxattr)   pOps
   resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
   resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
   resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
@@ -672,6 +682,19 @@ resCFuseOperations ops handler = do
     filePath <- peekFilePath pFilePath
     fh <- getFHJust pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
+
+  wrapSetxattr :: (FilePath -> String -> B.ByteString -> SetxattrFlag -> IO Errno) -> C.CSetxattr
+  wrapSetxattr go pFilePath pName pValue valueSize cFlags = handleAsFuseError $ do
+    filePath <- peekFilePath pFilePath
+    name <- peekCString pName
+    -- TODO use unsafePackCStringLen?
+    value <- B.packCStringLen (pValue, fromIntegral valueSize)
+    let eflag = case cFlags of
+          0 -> Right SetxattrDefault
+          (#const XATTR_CREATE) -> Right SetxattrCreate
+          (#const XATTR_REPLACE) -> Right SetxattrReplace
+          _ -> Left eINVAL
+    either pure (go filePath name value) eflag
 
   wrapOpendir :: (FilePath -> IO (Either Errno dh)) -> C.COpendir
   wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
