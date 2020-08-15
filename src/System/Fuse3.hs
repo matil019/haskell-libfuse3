@@ -10,6 +10,7 @@ module System.Fuse3
   , fileModeToEntryType
   , SyncType(..)
   , FileStat(..)
+  , defaultFileStat
   , getFileStat
   , getFileStatFd
   , FileSystemStats

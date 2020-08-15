@@ -7,7 +7,7 @@ import Data.ByteString (ByteString)
 import Data.List (foldl')
 import Foreign.C (CInt, Errno, eIO, eNOENT, eOK)
 import System.Clock (Clock(Realtime), getTime)
-import System.Fuse3 (FileStat(FileStat), defaultFuseOps, fuseMain)
+import System.Fuse3 (FileStat, defaultFileStat, defaultFuseOps, fuseMain)
 import System.IO (hPrint, stderr)
 import System.Posix.Files (groupReadMode, otherReadMode, ownerReadMode, ownerWriteMode, regularFileMode, unionFileModes)
 import System.Posix.User (getRealGroupID, getRealUserID)
@@ -21,18 +21,15 @@ nullGetattr "/" = do
   fileOwner <- getRealUserID
   fileGroup <- getRealGroupID
   now <- getTime Realtime
-  pure $ Right $ FileStat
-    { fileID = 0
-    , fileMode = foldl' unionFileModes regularFileMode [ownerReadMode, ownerWriteMode, groupReadMode, otherReadMode]
-    , linkCount = 1
-    , fileOwner
-    , fileGroup
-    , specialDeviceID = 0
-    , fileSize = 2 ^ (32 :: Int) -- 4G
-    , blockCount = 0
-    , accessTimeHiRes = now
-    , modificationTimeHiRes = now
-    , statusChangeTimeHiRes = now
+  pure $ Right $ defaultFileStat
+    { Fuse.fileMode = foldl' unionFileModes regularFileMode [ownerReadMode, ownerWriteMode, groupReadMode, otherReadMode]
+    , Fuse.linkCount = 1
+    , Fuse.fileOwner
+    , Fuse.fileGroup
+    , Fuse.fileSize = 2 ^ (32 :: Int) -- 4G
+    , Fuse.accessTimeHiRes = now
+    , Fuse.modificationTimeHiRes = now
+    , Fuse.statusChangeTimeHiRes = now
     }
 nullGetattr _ = pure $ Left eNOENT
 
