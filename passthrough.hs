@@ -224,7 +224,7 @@ xmpOper = defaultFuseOps
   , fuseSetxattr      = Just xmpSetxattr
   , fuseGetxattr      = Just xmpGetxattr
   , fuseListxattr     = Just xmpListxattr
-  -- , fuseRemovexattr   = Just xmpRemovexattr
+  , fuseRemovexattr   = Just xmpRemovexattr
   -- , fuseCopyFileRange = Just xmpCopyFileRange
   -- , fuseLseek         = Just xmpLseek
   }

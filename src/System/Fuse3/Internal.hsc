@@ -324,7 +324,8 @@ data FuseOperations fh dh = FuseOperations
   , -- | Implements @listxattr(2)@.
     fuseListxattr :: Maybe (FilePath -> IO (Either Errno [String]))
 
-    -- TODO , removexattr :: _
+  , -- | Implements @removexattr(2)@.
+    fuseRemovexattr :: Maybe (FilePath -> String -> IO Errno)
 
   , -- | Implements @opendir(3)@.
     --
@@ -420,6 +421,7 @@ defaultFuseOps = FuseOperations
   , fuseSetxattr = Nothing
   , fuseGetxattr = Nothing
   , fuseListxattr = Nothing
+  , fuseRemovexattr = Nothing
   , fuseOpendir = Nothing
   , fuseReaddir = Nothing
   , fuseReleasedir = Nothing
@@ -519,6 +521,7 @@ resCFuseOperations ops handler = do
   resC C.mkSetxattr   wrapSetxattr   (fuseSetxattr ops)   >>= liftIO . (#poke struct fuse_operations, setxattr)   pOps
   resC C.mkGetxattr   wrapGetxattr   (fuseGetxattr ops)   >>= liftIO . (#poke struct fuse_operations, getxattr)   pOps
   resC C.mkListxattr  wrapListxattr  (fuseListxattr ops)  >>= liftIO . (#poke struct fuse_operations, listxattr)  pOps
+  resC C.mkRemovexattr wrapRemovexattr (fuseRemovexattr ops) >>= liftIO . (#poke struct fuse_operations, removexattr) pOps
   resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
   resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
   resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
@@ -731,6 +734,12 @@ resCFuseOperations ops handler = do
             let len = namesLen `min` fromIntegral bufSize
             copyArray pBuf pNames len
             pure $ Right $ fromIntegral len
+
+  wrapRemovexattr :: (FilePath -> String -> IO Errno) -> C.CRemovexattr
+  wrapRemovexattr go pFilePath pName = handleAsFuseError $ do
+    filePath <- peekFilePath pFilePath
+    name <- peekCString pName
+    go filePath name
 
   wrapOpendir :: (FilePath -> IO (Either Errno dh)) -> C.COpendir
   wrapOpendir go pFilePath pFuseFileInfo = handleAsFuseError $ do
