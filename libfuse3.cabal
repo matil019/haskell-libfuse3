@@ -44,13 +44,12 @@ executable null
                      , bytestring
                      , clock
                      , unix
-  -- hs-source-dirs:
+  hs-source-dirs:      example
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
 
 executable passthrough
   main-is:             passthrough.hs
-  -- TODO move into the library
   other-modules:       CLoff
   -- other-extensions:
   build-depends:       libfuse3, base
@@ -59,6 +58,6 @@ executable passthrough
                      , linux-xattr
                      , time
                      , unix
-  -- hs-source-dirs:
+  hs-source-dirs:      example
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
