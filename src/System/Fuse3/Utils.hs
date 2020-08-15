@@ -1,7 +1,10 @@
 -- | Miscellaneous utilities provided for convenience.
+--
+-- These can be used for general purpose and are not directly related to FUSE.
 module System.Fuse3.Utils where
 
 import Control.Exception (tryJust)
+import Data.Bits ((.&.), Bits)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Foreign (copyArray, pokeElemOff)
@@ -51,3 +54,11 @@ pokeCStringLen0 (pBuf, bufSize) src =
     let bufSize0 = bufSize - 1
     copyArray pBuf pSrc (min bufSize0 srcSize)
     pokeElemOff pBuf (min bufSize0 srcSize) 0
+
+-- | @testBitSet bits mask@ is @True@ iff all bits in @mask@ are set in @bits@.
+--
+-- @
+-- testBitSet bits mask ≡ bits .&. mask == mask
+-- @
+testBitSet :: Bits a => a -> a -> Bool
+testBitSet bits mask = bits .&. mask == mask

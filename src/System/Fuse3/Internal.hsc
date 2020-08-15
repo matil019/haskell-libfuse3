@@ -9,7 +9,7 @@ import Control.Exception (Exception, bracket_, finally, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
-import Data.Bits ((.&.), (.|.), Bits)
+import Data.Bits ((.&.), (.|.))
 import Data.Foldable (traverse_)
 import Data.Maybe (fromJust)
 import Foreign
@@ -41,7 +41,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
-import System.Fuse3.Utils (pokeCStringLen0, unErrno)
+import System.Fuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
@@ -153,15 +153,6 @@ accessErrno path mode = withFilePath path $ \cPath -> do
   if ret == 0
     then pure eOK
     else getErrno
-
--- TODO move to another module?
--- | @testBitSet bits mask@ is @True@ iff all bits in @mask@ are set in @bits@.
---
--- @
--- testBitSet bits mask ≡ bits .&. mask == mask
--- @
-testBitSet :: Bits a => a -> a -> Bool
-testBitSet bits mask = bits .&. mask == mask
 
 -- memo: when adding a new field, make sure to update resCFuseOperations
 -- | The file system operations.
@@ -1015,7 +1006,6 @@ fuseMain ops handler = do
   args <- getArgs
   fuseRun prog args ops handler
 
--- TODO move to another module?
 -- | Gets a file handle from `C.FuseFileInfo` which is embedded with `newFH`.
 --
 -- If either the @Ptr `C.FuseFileInfo`@ itself or its @fh@ field is NULL, returns @Nothing@.
