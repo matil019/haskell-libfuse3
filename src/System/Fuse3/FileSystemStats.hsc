@@ -18,7 +18,7 @@ import qualified Foreign
 --
 -- @f_favail@, @f_fsid@ and @f_flag@ fields are ignored.
 data FileSystemStats = FileSystemStats
-  { -- | Filesystem block size. @f_bsize@ TODO look up the FUSE default. (512?)
+  { -- | Filesystem block size. @f_bsize@
     blockSize :: CULong
   , -- | Fragment size. @f_frsize@
     fragmentSize :: CULong
