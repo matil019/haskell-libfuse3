@@ -81,7 +81,7 @@ import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
 import System.Posix.Process (createSession)
-import System.Posix.Types (ByteCount, COff(COff), DeviceID, FileMode, FileOffset, GroupID, UserID)
+import System.Posix.Types (ByteCount, COff(COff), CSsize, DeviceID, FileMode, FileOffset, GroupID, UserID)
 import Text.Printf (hPrintf, printf)
 
 import qualified Control.Monad.Trans.Resource as Res
@@ -313,7 +313,7 @@ data FuseOperations fh dh = FuseOperations
 
   , -- | Implements @setxattr(2)@.
     --
-    -- The parameters are path, name, value and flags.
+    -- The parameters are: path, name, value and flags.
     fuseSetxattr :: Maybe (FilePath -> String -> B.ByteString -> SetxattrFlag -> IO Errno)
 
   , -- | Implements @getxattr(2)@.
@@ -392,7 +392,9 @@ data FuseOperations fh dh = FuseOperations
     -- space for an open file.
     fuseFallocate :: Maybe (FilePath -> fh -> CInt -> FileOffset -> FileOffset -> IO Errno)
 
-    -- TODO , copy_file_range :: _
+  , -- | Implements `copy_file_range(2)`.
+    fuseCopyFileRange :: Maybe (FilePath -> fh -> FileOffset -> FilePath -> fh -> FileOffset -> ByteCount -> CInt -> IO (Either Errno CSsize))
+
     -- TODO , lseek :: _
   }
 
@@ -432,6 +434,7 @@ defaultFuseOps = FuseOperations
   , fuseCreate = Nothing
   , fuseUtimens = Nothing
   , fuseFallocate = Nothing
+  , fuseCopyFileRange = Nothing
   }
 
 data FuseConfig = FuseConfig
@@ -532,6 +535,7 @@ resCFuseOperations ops handler = do
   resC C.mkCreate     wrapCreate     (fuseCreate ops)     >>= liftIO . (#poke struct fuse_operations, create)     pOps
   resC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    >>= liftIO . (#poke struct fuse_operations, utimens)    pOps
   resC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  >>= liftIO . (#poke struct fuse_operations, fallocate)  pOps
+  resC C.mkCopyFileRange wrapCopyFileRange (fuseCopyFileRange ops) >>= liftIO . (#poke struct fuse_operations, copy_file_range) pOps
   pure pOps
   where
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
@@ -546,6 +550,9 @@ resCFuseOperations ops handler = do
   -- return a (successful) result as positive int and a negated errno as negative int
   handleAsFuseErrorResult :: IO (Either Errno CInt) -> IO CInt
   handleAsFuseErrorResult = fmap (either (negate . unErrno) id) . handle (fmap Left . handler)
+
+  handleAsFuseErrorCSsize :: IO (Either Errno CSsize) -> IO CSsize
+  handleAsFuseErrorCSsize = fmap (either (fromIntegral . negate . unErrno) id) . handle (fmap Left . handler)
 
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
@@ -846,6 +853,14 @@ resCFuseOperations ops handler = do
     filePath <- peekFilePath pFilePath
     fh <- getFHJust pFuseFileInfo
     go filePath fh mode offset len
+
+  wrapCopyFileRange :: (FilePath -> fh -> FileOffset -> FilePath -> fh -> FileOffset -> ByteCount -> CInt -> IO (Either Errno CSsize)) -> C.CCopyFileRange
+  wrapCopyFileRange go pFilePathIn pFuseFileInfoIn offsetIn pFilePathOut pFuseFileInfoOut offsetOut size flags = handleAsFuseErrorCSsize $ do
+    filePathIn <- peekFilePath pFilePathIn
+    fhIn <- getFHJust pFuseFileInfoIn
+    filePathOut <- peekFilePath pFilePathOut
+    fhOut <- getFHJust pFuseFileInfoOut
+    go filePathIn fhIn offsetIn filePathOut fhOut offsetOut size flags
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about.

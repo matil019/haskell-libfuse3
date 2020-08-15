@@ -184,12 +184,12 @@ xmpListxattr path = tryErrno $ lListXAttr path
 xmpRemovexattr :: FilePath -> String -> IO Errno
 xmpRemovexattr path name = tryErrno_ $ lRemoveXAttr path name
 
-xmpCopyFileRange :: Fd -> FileOffset -> Fd -> FileOffset -> ByteCount -> IO (Either Errno CSsize)
-xmpCopyFileRange (Fd fdIn) offIn (Fd fdOut) offOut len =
+xmpCopyFileRange :: Fd -> FileOffset -> Fd -> FileOffset -> ByteCount -> CUInt -> IO (Either Errno CSsize)
+xmpCopyFileRange (Fd fdIn) offIn (Fd fdOut) offOut len flags =
   tryErrno $
   with (fromIntegral offIn) $ \plOffIn ->
   with (fromIntegral offOut) $ \plOffOut -> do
-    c_copy_file_range fdIn plOffIn fdOut plOffOut len 0
+    c_copy_file_range fdIn plOffIn fdOut plOffOut len flags
     -- the example of libfuse closes the fds but I don't think it is correct
 
 xmpLseek :: Fd -> SeekMode -> FileOffset -> IO (Either Errno FileOffset)
@@ -225,7 +225,7 @@ xmpOper = defaultFuseOps
   , fuseGetxattr      = Just xmpGetxattr
   , fuseListxattr     = Just xmpListxattr
   , fuseRemovexattr   = Just xmpRemovexattr
-  -- , fuseCopyFileRange = Just xmpCopyFileRange
+  , fuseCopyFileRange = Just $ \_ fdIn offIn _ fdOut offOut size flags -> xmpCopyFileRange fdIn offIn fdOut offOut size (fromIntegral flags)
   -- , fuseLseek         = Just xmpLseek
   }
 
