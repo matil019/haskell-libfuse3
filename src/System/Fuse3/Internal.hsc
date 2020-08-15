@@ -38,7 +38,7 @@ SUCH DAMAGE.
 -}
 module System.Fuse3.Internal where
 
-import Control.Exception (Exception, bracket, bracket_, finally, handle)
+import Control.Exception (Exception, bracket_, finally, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -64,10 +64,9 @@ import Foreign
   , peekByteOff
   , poke
   , pokeByteOff
-  , pokeElemOff
   , with
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CStringLen, Errno(Errno), eINVAL, eOK, getErrno, peekCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), Errno, eINVAL, eOK, getErrno, peekCString, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -75,6 +74,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
+import System.Fuse3.Utils (pokeCStringLen0, unErrno)
 import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
@@ -993,6 +993,7 @@ fuseMainReal = \pFuse (foreground, mountPt) -> do
         then exitSuccess
         else exitFailure
 
+-- TODO split the parts of this function so that users can call fuseMainReal more easily
 -- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh dh -> (e -> IO Errno) -> IO a
 fuseRun prog args ops handler = runResourceT $ do
@@ -1039,33 +1040,6 @@ fuseMain ops handler = do
   prog <- getProgName
   args <- getArgs
   fuseRun prog args ops handler
-
--- TODO move to another module
--- | Marshals a Haskell string into a NUL terminated C string in a locale-dependent way.
---
--- Does `withCStringLen` and copies it into the destination buffer.
---
--- If the destination buffer is not long enough to hold the source string, it is truncated and a
--- NUL byte is appended at the end of the buffer.
-pokeCStringLen0 :: CStringLen -> String -> IO ()
-pokeCStringLen0 (pBuf, bufSize) src =
-  withCStringLen src $ \(pSrc, srcSize) -> do
-    -- withCStringLen does *not* append NUL byte at the end
-    let bufSize0 = bufSize - 1
-    copyArray pBuf pSrc (min bufSize0 srcSize)
-    pokeElemOff pBuf (min bufSize0 srcSize) 0
-
--- | Unwraps the newtype `Errno`.
-unErrno :: Errno -> CInt
-unErrno (Errno errno) = errno
-
--- | `maybeWith` applied to `FunPtr`.
-maybeWithFun :: (a -> (FunPtr b -> IO c) -> IO c) -> Maybe a -> (FunPtr b -> IO c) -> IO c
-maybeWithFun = maybe ($ nullFunPtr)
-
--- | Automatically releases a @foreign import ccall "wrapper"@ with `freeHaskellFunPtr`.
-withHaskellFunPtr :: (fun -> IO (FunPtr fun)) -> fun -> (FunPtr fun -> IO c) -> IO c
-withHaskellFunPtr wrapper fun = bracket (wrapper fun) freeHaskellFunPtr
 
 -- TODO move to another module?
 -- | Gets a file handle from `C.FuseFileInfo` which is embedded with `newFH`.
