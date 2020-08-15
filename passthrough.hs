@@ -226,7 +226,7 @@ xmpOper = defaultFuseOps
   , fuseListxattr     = Just xmpListxattr
   , fuseRemovexattr   = Just xmpRemovexattr
   , fuseCopyFileRange = Just $ \_ fdIn offIn _ fdOut offOut size flags -> xmpCopyFileRange fdIn offIn fdOut offOut size (fromIntegral flags)
-  -- , fuseLseek         = Just xmpLseek
+  , fuseLseek         = Just $ \_ fd off mode -> xmpLseek fd mode off
   }
 
 main :: IO ()

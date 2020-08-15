@@ -75,7 +75,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.Fuse3.FileStat (FileStat)
 import System.Fuse3.FileSystemStats (FileSystemStats)
-import System.IO (IOMode(ReadMode, WriteMode), stderr, stdin, stdout, withFile)
+import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
@@ -392,10 +392,11 @@ data FuseOperations fh dh = FuseOperations
     -- space for an open file.
     fuseFallocate :: Maybe (FilePath -> fh -> CInt -> FileOffset -> FileOffset -> IO Errno)
 
-  , -- | Implements `copy_file_range(2)`.
+  , -- | Implements @copy_file_range(2)@.
     fuseCopyFileRange :: Maybe (FilePath -> fh -> FileOffset -> FilePath -> fh -> FileOffset -> ByteCount -> CInt -> IO (Either Errno CSsize))
 
-    -- TODO , lseek :: _
+  , -- | Implements 'System.Posix.IO.fdSeek' @lseek(3)@.
+    fuseLseek :: Maybe (FilePath -> fh -> FileOffset -> SeekMode -> IO (Either Errno FileOffset))
   }
 
 -- | An empty set of operations whose fields are @Nothing@.
@@ -435,6 +436,7 @@ defaultFuseOps = FuseOperations
   , fuseUtimens = Nothing
   , fuseFallocate = Nothing
   , fuseCopyFileRange = Nothing
+  , fuseLseek = Nothing
   }
 
 data FuseConfig = FuseConfig
@@ -536,6 +538,7 @@ resCFuseOperations ops handler = do
   resC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    >>= liftIO . (#poke struct fuse_operations, utimens)    pOps
   resC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  >>= liftIO . (#poke struct fuse_operations, fallocate)  pOps
   resC C.mkCopyFileRange wrapCopyFileRange (fuseCopyFileRange ops) >>= liftIO . (#poke struct fuse_operations, copy_file_range) pOps
+  resC C.mkLseek      wrapLseek      (fuseLseek ops)      >>= liftIO . (#poke struct fuse_operations, lseek)      pOps
   pure pOps
   where
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
@@ -549,10 +552,16 @@ resCFuseOperations ops handler = do
 
   -- return a (successful) result as positive int and a negated errno as negative int
   handleAsFuseErrorResult :: IO (Either Errno CInt) -> IO CInt
-  handleAsFuseErrorResult = fmap (either (negate . unErrno) id) . handle (fmap Left . handler)
+  handleAsFuseErrorResult = handleAsFuseErrorIntegral
 
   handleAsFuseErrorCSsize :: IO (Either Errno CSsize) -> IO CSsize
-  handleAsFuseErrorCSsize = fmap (either (fromIntegral . negate . unErrno) id) . handle (fmap Left . handler)
+  handleAsFuseErrorCSsize = handleAsFuseErrorIntegral
+
+  handleAsFuseErrorCOff :: IO (Either Errno COff) -> IO COff
+  handleAsFuseErrorCOff = handleAsFuseErrorIntegral
+
+  handleAsFuseErrorIntegral :: Integral a => IO (Either Errno a) -> IO a
+  handleAsFuseErrorIntegral = fmap (either (fromIntegral . negate . unErrno) id) . handle (fmap Left . handler)
 
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
@@ -861,6 +870,17 @@ resCFuseOperations ops handler = do
     filePathOut <- peekFilePath pFilePathOut
     fhOut <- getFHJust pFuseFileInfoOut
     go filePathIn fhIn offsetIn filePathOut fhOut offsetOut size flags
+
+  wrapLseek :: (FilePath -> fh -> FileOffset -> SeekMode -> IO (Either Errno FileOffset)) -> C.CLseek
+  wrapLseek go pFilePath offset whence pFuseFileInfo = handleAsFuseErrorCOff $ do
+    filePath <- peekFilePath pFilePath
+    fh <- getFHJust pFuseFileInfo
+    let emode = case whence of
+          (#const SEEK_SET) -> Right AbsoluteSeek
+          (#const SEEK_CUR) -> Right RelativeSeek
+          (#const SEEK_END) -> Right SeekFromEnd
+          _ -> Left eINVAL
+    either (pure . Left) (go filePath fh offset) emode
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about.
