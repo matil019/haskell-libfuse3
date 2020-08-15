@@ -7,6 +7,7 @@ module System.Fuse3
 
   , AccessMode(..)
   , access
+  , accessErrno
 
   , EntryType(..)
   , entryTypeToFileMode

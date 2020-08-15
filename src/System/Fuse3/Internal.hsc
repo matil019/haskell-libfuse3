@@ -33,7 +33,7 @@ import Foreign
   , pokeByteOff
   , with
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), Errno, eINVAL, eOK, getErrno, peekCString, withCStringLen)
+import Foreign.C (CDouble(CDouble), CInt(CInt), Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -129,19 +129,26 @@ data SetxattrFlag
 --
 -- Calls @access@. Compared to `System.Posix.Files.fileAccess` and
 -- `System.Posix.Files.fileExist`, this function doesn't translate the errno and just
--- returns it.
+-- returns @()@ to indicate success.
+access :: FilePath -> AccessMode -> IO ()
+access path mode = do
+  e <- accessErrno path mode
+  if e == eOK
+    then pure ()
+    else throwErrno "access"
+
+-- | Same as `access` but returns the `Errno` instead of throwing an exception.
 --
--- @pure `eOK`@ on success and `getErrno` on failure. Never throws an exception.
---
--- TODO rename to @accessErrno@ to contrast the fact that this doesn't throw?
-access :: FilePath -> AccessMode -> IO Errno
-access path mode = withFilePath path $ \cPath -> do
+-- Returns `eOK` on success.
+accessErrno :: FilePath -> AccessMode -> IO Errno
+accessErrno path mode = withFilePath path $ \cPath -> do
   let cMode = case mode of
         FileOK -> #const F_OK
         PermOK r w x ->
           (if r then (#const R_OK) else 0) .|.
           (if w then (#const W_OK) else 0) .|.
           (if x then (#const X_OK) else 0)
+  resetErrno
   ret <- c_access cPath cMode
   if ret == 0
     then pure eOK

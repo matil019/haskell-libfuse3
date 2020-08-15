@@ -51,7 +51,7 @@ xmpGetattr :: FilePath -> IO (Either Errno FileStat)
 xmpGetattr = tryErrno . getFileStat
 
 xmpAccess :: FilePath -> AccessMode -> IO Errno
-xmpAccess = access
+xmpAccess = accessErrno
 
 xmpReadlink :: FilePath -> IO (Either Errno FilePath)
 xmpReadlink = tryErrno . readSymbolicLink
