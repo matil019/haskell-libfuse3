@@ -9,8 +9,8 @@ import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Void (Void)
 import Foreign (Ptr, allocaBytes, with)
 import Foreign.C (CInt(CInt), CSize(CSize), CUInt(CUInt), Errno(Errno), eIO, eOK, eOPNOTSUPP)
-import System.Fuse3
 import System.IO (SeekMode, hPrint, stderr)
+import System.LibFuse3
 import System.Linux.XAttr (lCreateXAttr, lGetXAttr, lListXAttr, lRemoveXAttr, lReplaceXAttr, lSetXAttr)
 import System.Posix.Directory (closeDirStream, createDirectory, openDirStream, readDirStream, removeDirectory)
 import System.Posix.Files (createDevice, createLink, createNamedPipe, createSymbolicLink, readSymbolicLink, removeLink, rename, setFdSize, setFileCreationMask, setFileMode, setFileSize, setSymbolicLinkOwnerAndGroup, setSymbolicLinkTimesHiRes)

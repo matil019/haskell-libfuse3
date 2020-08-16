@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK no-print-missing-docs #-}
-module System.Fuse3.Internal where
+module System.LibFuse3.Internal where
 
 import Control.Exception (Exception, bracket_, finally, handle)
 import Control.Monad (unless, void)
@@ -38,11 +38,11 @@ import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess, exitWith)
-import System.Fuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
-import System.Fuse3.FileStat (FileStat)
-import System.Fuse3.FileSystemStats (FileSystemStats)
-import System.Fuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
+import System.LibFuse3.FileStat (FileStat)
+import System.LibFuse3.FileSystemStats (FileSystemStats)
+import System.LibFuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
+import System.LibFuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
@@ -54,7 +54,7 @@ import Text.Printf (hPrintf, printf)
 import qualified Control.Monad.Trans.Resource as Res
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
-import qualified System.Fuse3.Internal.C as C
+import qualified System.LibFuse3.Internal.C as C
 import qualified System.Posix.IO
 import qualified System.Posix.Signals as Signals
 

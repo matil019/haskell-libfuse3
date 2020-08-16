@@ -2,14 +2,14 @@
 -- | C land.
 --
 -- Exported C called from Haskell
-module System.Fuse3.Internal.C where
+module System.LibFuse3.Internal.C where
 
 import Data.Word (Word32, Word64)
 import Foreign (FunPtr, Ptr, Storable, peekByteOff, pokeByteOff)
 import Foreign.C (CDouble, CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
 import System.Clock (TimeSpec)
-import System.Fuse3.FileStat (FileStat)
-import System.Fuse3.FileSystemStats (FileSystemStats)
+import System.LibFuse3.FileStat (FileStat)
+import System.LibFuse3.FileSystemStats (FileSystemStats)
 import System.Posix.Types (CDev(CDev), CGid(CGid), CMode(CMode), COff(COff), CSsize(CSsize), CUid(CUid))
 
 import qualified Foreign
@@ -31,7 +31,7 @@ data FuseCmdlineOpts
 
 -- | The direct, storable representation of @struct fuse_config@.
 --
--- Not to be confused with the high-level `System.Fuse3.Internal.FuseConfig`.
+-- Not to be confused with the high-level `System.LibFuse3.Internal.FuseConfig`.
 --
 -- TODO add more fields
 data FuseConfig = FuseConfig
@@ -85,7 +85,7 @@ type FuseFillDirFlags = #type enum fuse_fill_dir_flags
 -- All operations are optional. NULL indicates undefined operation. You may modify some
 -- of the fields to fine-tune the behavior.
 --
--- Not to be confused with Haskell-friendly `System.Fuse3.Internal.FuseOperations`.
+-- Not to be confused with Haskell-friendly `System.LibFuse3.Internal.FuseOperations`.
 -- Also not to be confused with libfuse's low-level API @struct fuse_lowlevel_ops@.
 data FuseOperations = FuseOperations
   { fuseGetattr       :: FunPtr CGetattr

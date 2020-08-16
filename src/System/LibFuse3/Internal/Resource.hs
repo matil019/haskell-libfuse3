@@ -1,5 +1,5 @@
 -- | Utils related to @ResourceT@
-module System.Fuse3.Internal.Resource where
+module System.LibFuse3.Internal.Resource where
 
 import Control.Exception (catch, mask, throwIO)
 import Control.Monad.IO.Class (liftIO)

@@ -1,5 +1,5 @@
 -- | A Haskell binding to libfuse-3.x.
-module System.Fuse3
+module System.LibFuse3
   ( FuseOperations(..)
   , defaultFuseOps
 
@@ -26,13 +26,13 @@ module System.Fuse3
 
   , SetxattrFlag(..)
 
-  , module System.Fuse3.Utils
+  , module System.LibFuse3.Utils
 
   , fuseMain
   )
   where
 
-import System.Fuse3.FileStat
-import System.Fuse3.FileSystemStats
-import System.Fuse3.Internal
-import System.Fuse3.Utils
+import System.LibFuse3.FileStat
+import System.LibFuse3.FileSystemStats
+import System.LibFuse3.Internal
+import System.LibFuse3.Utils

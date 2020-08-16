@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 -- | @struct statvfs@ in Haskell.
-module System.Fuse3.FileSystemStats where
+module System.LibFuse3.FileSystemStats where
 
 #include <sys/statvfs.h>
 

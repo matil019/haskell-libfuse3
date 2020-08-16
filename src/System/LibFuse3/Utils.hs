@@ -1,7 +1,7 @@
 -- | Miscellaneous utilities provided for convenience.
 --
 -- These can be used for general purpose and are not directly related to FUSE.
-module System.Fuse3.Utils
+module System.LibFuse3.Utils
   ( -- * Bitsets
     testBitSet
 

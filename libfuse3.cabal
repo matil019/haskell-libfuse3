@@ -17,13 +17,13 @@ build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     System.Fuse3
-                       System.Fuse3.FileStat
-                       System.Fuse3.FileSystemStats
-                       System.Fuse3.Internal
-                       System.Fuse3.Internal.C
-                       System.Fuse3.Internal.Resource
-                       System.Fuse3.Utils
+  exposed-modules:     System.LibFuse3
+                       System.LibFuse3.FileStat
+                       System.LibFuse3.FileSystemStats
+                       System.LibFuse3.Internal
+                       System.LibFuse3.Internal.C
+                       System.LibFuse3.Internal.Resource
+                       System.LibFuse3.Utils
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.14 && <4.15

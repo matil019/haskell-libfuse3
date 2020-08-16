@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 -- | @struct stat@ in Haskell.
-module System.Fuse3.FileStat where
+module System.LibFuse3.FileStat where
 
 #include <sys/stat.h>
 
