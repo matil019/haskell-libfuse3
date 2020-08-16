@@ -17,15 +17,17 @@ import qualified System.Posix.Internals as Posix
 
 #include <fuse.h>
 
--- TODO check peek/poke on structs
+-- | @struct fuse_args@
+data FuseArgs
 
-data FuseArgs -- struct fuse_args
+-- | @struct fuse_buf@
+data FuseBuf
 
-data FuseBuf -- struct fuse_buf
+-- | @struct fuse_bufvec@
+data FuseBufvec
 
-data FuseBufvec -- struct fuse_bufvec
-
-data FuseCmdlineOpts -- struct fuse_cmdline_opts
+-- | @struct fuse_cmdline_opts@
+data FuseCmdlineOpts
 
 -- | The direct, storable representation of @struct fuse_config@.
 --
@@ -63,20 +65,28 @@ instance Storable FuseConfig where
     (#poke struct fuse_config, attr_timeout)     ptr attrTimeout
     (#poke struct fuse_config, use_ino)          ptr useIno
 
-data FuseConnInfo -- struct fuse_conn_info
+-- | @struct fuse_conn_info@
+data FuseConnInfo
 
-data FuseFileInfo -- struct fuse_file_info
+-- | @struct fuse_file_info@
+data FuseFileInfo
 
--- typedef fuse_fill_dir_t
+-- | @typedef fuse_fill_dir_t@
 type FuseFillDir = Ptr FuseFillDirBuf -> CString -> Ptr FileStat -> COff -> FuseFillDirFlags -> IO CInt
 
-data FuseFillDirBuf -- void
+-- | @void@, used in `FuseFillDir`.
+data FuseFillDirBuf
 
+-- | @enum fuse_fill_dir_flags@
 type FuseFillDirFlags = #type enum fuse_fill_dir_flags
 
--- | @struct fuse_operations@
+-- | The direct, storable representation of @struct fuse_operations@.
 --
--- All operations are optional. NULL indicates undefined operation.
+-- All operations are optional. NULL indicates undefined operation. You may modify some
+-- of the fields to fine-tune the behavior.
+--
+-- Not to be confused with Haskell-friendly `System.Fuse3.Internal.FuseOperations`.
+-- Also not to be confused with libfuse's low-level API @struct fuse_lowlevel_ops@.
 data FuseOperations = FuseOperations
   { fuseGetattr       :: FunPtr CGetattr
   , fuseReadlink      :: FunPtr CReadlink
@@ -216,13 +226,17 @@ instance Storable FuseOperations where
     (#poke struct fuse_operations, copy_file_range) ptr fuseCopyFileRange
     (#poke struct fuse_operations, lseek)           ptr fuseLseek
 
-data FusePollhandle -- struct fuse_pollhandle
+-- | @struct fuse_pollhandle@
+data FusePollhandle
 
+-- | @enum fuse_readdir_flags@
 type FuseReaddirFlags = #type enum fuse_readdir_flags
 
-data FuseSession -- struct fuse_session
+-- | @struct fuse_session@
+data FuseSession
 
-data StructFuse -- struct fuse
+-- | @struct fuse@
+data StructFuse
 
 foreign import ccall safe "fuse_cmdline_help"
   fuse_cmdline_help :: IO ()
@@ -266,7 +280,6 @@ foreign import ccall safe "fuse_session_exit"
 foreign import ccall safe "fuse_unmount"
   fuse_unmount :: Ptr StructFuse -> IO ()
 
--- TODO move to another module (along with withCFuseOperations?)
 type CGetattr = CString -> Ptr FileStat -> Ptr FuseFileInfo -> IO CInt
 foreign import ccall "wrapper"
   mkGetattr :: CGetattr -> IO (FunPtr CGetattr)
