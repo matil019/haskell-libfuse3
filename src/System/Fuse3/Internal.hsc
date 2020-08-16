@@ -959,7 +959,6 @@ fuseMainReal = \pFuse (foreground, mountPt) -> do
         then exitSuccess
         else exitFailure
 
--- TODO split the parts of this function so that users can call fuseMainReal more easily
 -- | Parses the commandline arguments and runs fuse.
 fuseRun :: Exception e => String -> [String] -> FuseOperations fh dh -> (e -> IO Errno) -> IO a
 fuseRun prog args ops handler = runResourceT $ do
@@ -968,7 +967,7 @@ fuseRun prog args ops handler = runResourceT $ do
   pOp <- resCFuseOperations ops handler
   pFuse <- fmap snd $ Res.allocate
     (C.fuse_new pArgs pOp (#size struct fuse_operations) nullPtr)
-    C.fuse_destroy
+    (\p -> unless (p == nullPtr) $ C.fuse_destroy p)
   if pFuse == nullPtr
     then liftIO exitFailure -- fuse_new prints an error message
     else fuseMainReal pFuse mainArgs
