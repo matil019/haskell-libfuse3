@@ -1,4 +1,6 @@
 -- | Utils related to @ResourceT@
+--
+-- This is an internal module. It is exposed to allow fine-tuning and workarounds but its API is not stable.
 module System.LibFuse3.Internal.Resource where
 
 import Control.Exception (catch, mask, throwIO)

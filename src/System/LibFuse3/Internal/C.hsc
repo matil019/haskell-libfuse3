@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 -- | C land.
 --
+-- This is an internal module. It is exposed to allow fine-tuning and workarounds but its API is not stable.
+--
 -- Exported C called from Haskell
 module System.LibFuse3.Internal.C where
 

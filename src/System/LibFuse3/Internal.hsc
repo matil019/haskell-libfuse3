@@ -3,6 +3,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK no-print-missing-docs #-}
+-- | The core stuff
+--
+-- This is an internal module. It is exposed to allow fine-tuning and workarounds but its API is not stable.
 module System.LibFuse3.Internal where
 
 import Control.Exception (Exception, bracket_, finally, handle)
