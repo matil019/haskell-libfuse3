@@ -3,7 +3,7 @@ module System.LibFuse3
   ( FuseOperations(..)
   , defaultFuseOps
 
-  , FuseConfig(..)
+  , FuseConfig
 
   , AccessMode(..)
   , access
@@ -34,5 +34,6 @@ module System.LibFuse3
 
 import System.LibFuse3.FileStat
 import System.LibFuse3.FileSystemStats
+import System.LibFuse3.FuseConfig
 import System.LibFuse3.Internal
 import System.LibFuse3.Utils

@@ -20,6 +20,7 @@ library
   exposed-modules:     System.LibFuse3
                        System.LibFuse3.FileStat
                        System.LibFuse3.FileSystemStats
+                       System.LibFuse3.FuseConfig
                        System.LibFuse3.Internal
                        System.LibFuse3.Internal.C
                        System.LibFuse3.Internal.Resource

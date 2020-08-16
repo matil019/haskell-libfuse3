@@ -19,6 +19,7 @@ import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(F
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as BU
+import qualified System.LibFuse3.FuseConfig as FuseConfig
 
 foreign import ccall "pread"
   c_pread :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
@@ -34,7 +35,7 @@ foreign import ccall "copy_file_range"
 
 xmpInit :: FuseConfig -> IO FuseConfig
 xmpInit cfg = pure $ cfg
-  { useIno = True
+  { FuseConfig.useIno = True
   -- Pick up changes from lower filesystem right away. This is
   -- also necessary for better hardlink support. When the kernel
   -- calls the unlink() handler, it does not know the inode of
@@ -42,9 +43,9 @@ xmpInit cfg = pure $ cfg
   -- the cache of the associated inode - resulting in an
   -- incorrect st_nlink value being reported for any remaining
   -- hardlinks to this inode.
-  , entryTimeout = 0
-  , attrTimeout = 0
-  , negativeTimeout = 0
+  , FuseConfig.entryTimeout = 0
+  , FuseConfig.attrTimeout = 0
+  , FuseConfig.negativeTimeout = 0
   }
 
 xmpGetattr :: FilePath -> IO (Either Errno FileStat)

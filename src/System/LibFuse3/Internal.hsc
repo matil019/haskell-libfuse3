@@ -1,6 +1,5 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK no-print-missing-docs #-}
 -- | The core stuff
@@ -36,7 +35,7 @@ import Foreign
   , pokeByteOff
   , with
   )
-import Foreign.C (CDouble(CDouble), CInt(CInt), CUInt(CUInt), Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt(CInt), Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -44,6 +43,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess
 import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
 import System.LibFuse3.FileStat (FileStat)
 import System.LibFuse3.FileSystemStats (FileSystemStats)
+import System.LibFuse3.FuseConfig (FuseConfig, fromCFuseConfig, toCFuseConfig)
 import System.LibFuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
 import System.LibFuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.Posix.Directory (changeWorkingDirectory)
@@ -51,8 +51,7 @@ import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode
 import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
 import System.Posix.Process (createSession)
-import System.Posix.Signals (Signal)
-import System.Posix.Types (ByteCount, CGid(CGid), CMode(CMode), COff(COff), CSsize, CUid(CUid), DeviceID, FileMode, FileOffset, GroupID, UserID)
+import System.Posix.Types (ByteCount, COff(COff), CSsize, DeviceID, FileMode, FileOffset, GroupID, UserID)
 import Text.Printf (hPrintf, printf)
 
 import qualified Control.Monad.Trans.Resource as Res
@@ -807,109 +806,6 @@ resCFuseOperations ops handler = do
           (#const SEEK_END) -> Right SeekFromEnd
           _ -> Left eINVAL
     either (pure . Left) (go filePath fh offset) emode
-
-data FuseConfig = FuseConfig
-  { -- | @set_gid@
-    setGid :: Bool
-  , -- | @gid@
-    gid :: GroupID
-  , -- | @set_uid@
-    setUid :: Bool
-  , -- | @uid@
-    uid :: UserID
-  , -- | @set_mode@
-    setMode :: Bool
-  , -- | @umask@
-    umask :: FileMode
-  , -- | @entry_timeout@
-    entryTimeout :: Double
-  , -- | @negative_timeout@
-    negativeTimeout :: Double
-  , -- | @attr_timeout@
-    attrTimeout :: Double
-  , -- | @intr@
-    intr :: Bool
-  , -- | @intr_signal@
-    intrSignal :: Signal
-  , -- | @remember@
-    remember :: Int
-  , -- | @hard_remove@
-    hardRemove :: Bool
-  , -- | @use_ino@
-    useIno :: Bool
-  , -- | @readdir_ino@
-    readdirIno :: Bool
-  , -- | @direct_io@
-    directIo :: Bool
-  , -- | @kernel_cache@
-    kernelCache :: Bool
-  , -- | @auto_cache@
-    autoCache :: Bool
-  , -- | @ac_attr_timeout_set@
-    acAttrTimeoutSet :: Bool
-  , -- | @ac_attr_timeout@
-    acAttrTimeout :: Double
-  , -- | @nullpath_ok@
-    nullpathOk :: Bool
-  }
-  deriving (Eq, Show)
-
-toCFuseConfig :: FuseConfig -> C.FuseConfig
-toCFuseConfig FuseConfig{..} = C.FuseConfig
-  { C.setGid           = boolToCInt setGid
-  , C.gid              = CUInt $ (\(CGid x) -> x) gid
-  , C.setUid           = boolToCInt setUid
-  , C.uid              = CUInt $ (\(CUid x) -> x) uid
-  , C.setMode          = boolToCInt setMode
-  , C.umask            = CUInt $ (\(CMode x) -> x) umask
-  , C.entryTimeout     = CDouble entryTimeout
-  , C.negativeTimeout  = CDouble negativeTimeout
-  , C.attrTimeout      = CDouble attrTimeout
-  , C.intr             = boolToCInt intr
-  , C.intrSignal       = intrSignal
-  , C.remember         = fromIntegral remember
-  , C.hardRemove       = boolToCInt hardRemove
-  , C.useIno           = boolToCInt useIno
-  , C.readdirIno       = boolToCInt readdirIno
-  , C.directIo         = boolToCInt directIo
-  , C.kernelCache      = boolToCInt kernelCache
-  , C.autoCache        = boolToCInt autoCache
-  , C.acAttrTimeoutSet = boolToCInt acAttrTimeoutSet
-  , C.acAttrTimeout    = CDouble acAttrTimeout
-  , C.nullpathOk       = boolToCInt nullpathOk
-  }
-  where
-  boolToCInt b = if b then 1 else 0
-
-fromCFuseConfig :: C.FuseConfig -> FuseConfig
-fromCFuseConfig C.FuseConfig{..} = FuseConfig
-  { setGid           = cintToBool setGid
-  , gid              = CGid $ unCUInt gid
-  , setUid           = cintToBool setUid
-  , uid              = CUid $ unCUInt uid
-  , setMode          = cintToBool setMode
-  , umask            = CMode $ unCUInt umask
-  , entryTimeout     = unCDouble entryTimeout
-  , negativeTimeout  = unCDouble negativeTimeout
-  , attrTimeout      = unCDouble attrTimeout
-  , intr             = cintToBool intr
-  , intrSignal       = intrSignal
-  , remember         = fromIntegral $ unCInt remember
-  , hardRemove       = cintToBool hardRemove
-  , useIno           = cintToBool useIno
-  , readdirIno       = cintToBool readdirIno
-  , directIo         = cintToBool directIo
-  , kernelCache      = cintToBool kernelCache
-  , autoCache        = cintToBool autoCache
-  , acAttrTimeoutSet = cintToBool acAttrTimeoutSet
-  , acAttrTimeout    = unCDouble acAttrTimeout
-  , nullpathOk       = cintToBool nullpathOk
-  }
-  where
-  unCDouble (CDouble x) = x
-  unCInt (CInt x) = x
-  unCUInt (CUInt x) = x
-  cintToBool x = x /= 0
 
 -- | Allocates a @fuse_args@ struct to hold commandline arguments.
 resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
