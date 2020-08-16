@@ -34,17 +34,49 @@ data FuseCmdlineOpts
 -- | The direct, storable representation of @struct fuse_config@.
 --
 -- Not to be confused with the high-level `System.LibFuse3.Internal.FuseConfig`.
---
--- TODO add more fields
 data FuseConfig = FuseConfig
-  { -- | @entry_timeout@
+  { -- | @set_gid@
+    setGid :: CInt
+  , -- | @gid@
+    gid :: CUInt
+  , -- | @set_uid@
+    setUid :: CInt
+  , -- | @uid@
+    uid :: CUInt
+  , -- | @set_mode@
+    setMode :: CInt
+  , -- | @umask@
+    umask :: CUInt
+  , -- | @entry_timeout@
     entryTimeout :: CDouble
   , -- | @negative_timeout@
     negativeTimeout :: CDouble
   , -- | @attr_timeout@
     attrTimeout :: CDouble
+  , -- | @intr@
+    intr :: CInt
+  , -- | @intr_signal@
+    intrSignal :: CInt
+  , -- | @remember@
+    remember :: CInt
+  , -- | @hard_remove@
+    hardRemove :: CInt
   , -- | @use_ino@
     useIno :: CInt
+  , -- | @readdir_ino@
+    readdirIno :: CInt
+  , -- | @direct_io@
+    directIo :: CInt
+  , -- | @kernel_cache@
+    kernelCache :: CInt
+  , -- | @auto_cache@
+    autoCache :: CInt
+  , -- | @ac_attr_timeout_set@
+    acAttrTimeoutSet :: CInt
+  , -- | @ac_attr_timeout@
+    acAttrTimeout :: CDouble
+  , -- | @nullpath_ok@
+    nullpathOk :: CInt
   }
   deriving (Eq, Show)
 
@@ -55,17 +87,51 @@ instance Storable FuseConfig where
   alignment _ = #alignment struct fuse_config
 
   peek ptr = do
-    entryTimeout    <- (#peek struct fuse_config, entry_timeout)    ptr
-    negativeTimeout <- (#peek struct fuse_config, negative_timeout) ptr
-    attrTimeout     <- (#peek struct fuse_config, attr_timeout)     ptr
-    useIno          <- (#peek struct fuse_config, use_ino)          ptr
+    setGid           <- (#peek struct fuse_config, set_gid)             ptr
+    gid              <- (#peek struct fuse_config, gid)                 ptr
+    setUid           <- (#peek struct fuse_config, set_uid)             ptr
+    uid              <- (#peek struct fuse_config, uid)                 ptr
+    setMode          <- (#peek struct fuse_config, set_mode)            ptr
+    umask            <- (#peek struct fuse_config, umask)               ptr
+    entryTimeout     <- (#peek struct fuse_config, entry_timeout)       ptr
+    negativeTimeout  <- (#peek struct fuse_config, negative_timeout)    ptr
+    attrTimeout      <- (#peek struct fuse_config, attr_timeout)        ptr
+    intr             <- (#peek struct fuse_config, intr)                ptr
+    intrSignal       <- (#peek struct fuse_config, intr_signal)         ptr
+    remember         <- (#peek struct fuse_config, remember)            ptr
+    hardRemove       <- (#peek struct fuse_config, hard_remove)         ptr
+    useIno           <- (#peek struct fuse_config, use_ino)             ptr
+    readdirIno       <- (#peek struct fuse_config, readdir_ino)         ptr
+    directIo         <- (#peek struct fuse_config, direct_io)           ptr
+    kernelCache      <- (#peek struct fuse_config, kernel_cache)        ptr
+    autoCache        <- (#peek struct fuse_config, auto_cache)          ptr
+    acAttrTimeoutSet <- (#peek struct fuse_config, ac_attr_timeout_set) ptr
+    acAttrTimeout    <- (#peek struct fuse_config, ac_attr_timeout)     ptr
+    nullpathOk       <- (#peek struct fuse_config, nullpath_ok)         ptr
     pure FuseConfig{..}
 
   poke ptr FuseConfig{..} = do
-    (#poke struct fuse_config, entry_timeout)    ptr entryTimeout
-    (#poke struct fuse_config, negative_timeout) ptr negativeTimeout
-    (#poke struct fuse_config, attr_timeout)     ptr attrTimeout
-    (#poke struct fuse_config, use_ino)          ptr useIno
+    (#poke struct fuse_config, set_gid)             ptr setGid
+    (#poke struct fuse_config, gid)                 ptr gid
+    (#poke struct fuse_config, set_uid)             ptr setUid
+    (#poke struct fuse_config, uid)                 ptr uid
+    (#poke struct fuse_config, set_mode)            ptr setMode
+    (#poke struct fuse_config, umask)               ptr umask
+    (#poke struct fuse_config, entry_timeout)       ptr entryTimeout
+    (#poke struct fuse_config, negative_timeout)    ptr negativeTimeout
+    (#poke struct fuse_config, attr_timeout)        ptr attrTimeout
+    (#poke struct fuse_config, intr)                ptr intr
+    (#poke struct fuse_config, intr_signal)         ptr intrSignal
+    (#poke struct fuse_config, remember)            ptr remember
+    (#poke struct fuse_config, hard_remove)         ptr hardRemove
+    (#poke struct fuse_config, use_ino)             ptr useIno
+    (#poke struct fuse_config, readdir_ino)         ptr readdirIno
+    (#poke struct fuse_config, direct_io)           ptr directIo
+    (#poke struct fuse_config, kernel_cache)        ptr kernelCache
+    (#poke struct fuse_config, auto_cache)          ptr autoCache
+    (#poke struct fuse_config, ac_attr_timeout_set) ptr acAttrTimeoutSet
+    (#poke struct fuse_config, ac_attr_timeout)     ptr acAttrTimeout
+    (#poke struct fuse_config, nullpath_ok)         ptr nullpathOk
 
 -- | @struct fuse_conn_info@
 data FuseConnInfo
