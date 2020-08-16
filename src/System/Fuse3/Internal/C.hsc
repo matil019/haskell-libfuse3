@@ -4,7 +4,7 @@
 -- Exported C called from Haskell
 module System.Fuse3.Internal.C where
 
-import Data.Word (Word64)
+import Data.Word (Word32, Word64)
 import Foreign (FunPtr, Ptr, Storable, peekByteOff, pokeByteOff)
 import Foreign.C (CDouble, CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
 import System.Clock (TimeSpec)
@@ -72,7 +72,7 @@ type FuseFillDir = Ptr FuseFillDirBuf -> CString -> Ptr FileStat -> COff -> Fuse
 
 data FuseFillDirBuf -- void
 
-type FuseFillDirFlags = CInt -- enum fuse_fill_dir_flags -- TODO give proper type??
+type FuseFillDirFlags = #type enum fuse_fill_dir_flags
 
 -- | @struct fuse_operations@
 --
@@ -218,7 +218,7 @@ instance Storable FuseOperations where
 
 data FusePollhandle -- struct fuse_pollhandle
 
-type FuseReaddirFlags = CInt -- enum fuse_readdir_flags -- TODO give proper type??
+type FuseReaddirFlags = #type enum fuse_readdir_flags
 
 data FuseSession -- struct fuse_session
 
