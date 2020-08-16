@@ -404,52 +404,6 @@ defaultFuseOps = FuseOperations
   , fuseLseek = Nothing
   }
 
-data FuseConfig = FuseConfig
-  { -- | @entry_timeout@
-    entryTimeout :: Double
-  , -- | @negative_timeout@
-    negativeTimeout :: Double
-  , -- | @attr_timeout@
-    attrTimeout :: Double
-  , -- | @use_ino@
-    useIno :: Bool
-  }
-  deriving (Eq, Show)
-
-toCFuseConfig :: FuseConfig -> C.FuseConfig
-toCFuseConfig FuseConfig{..} = C.FuseConfig
-  { C.entryTimeout = CDouble entryTimeout
-  , C.negativeTimeout = CDouble negativeTimeout
-  , C.attrTimeout = CDouble attrTimeout
-  , C.useIno = if useIno then 1 else 0
-  }
-
-fromCFuseConfig :: C.FuseConfig -> FuseConfig
-fromCFuseConfig C.FuseConfig{..} = FuseConfig
-  { entryTimeout = unCDouble entryTimeout
-  , negativeTimeout = unCDouble negativeTimeout
-  , attrTimeout = unCDouble attrTimeout
-  , useIno = useIno /= 0
-  }
-  where
-  unCDouble (CDouble x) = x
-
--- | Allocates a @fuse_args@ struct to hold commandline arguments.
-resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
-resFuseArgs prog args = do
-  let allArgs = (prog:args)
-      argc = length allArgs
-  cArgs <- traverse (fmap snd . resNewCString) allArgs
-  pArgv <- fmap snd $ resNewArray cArgs
-  -- TODO call FUSE_ARGS_INIT instead?
-  fuseArgs <- fmap snd $ resMallocBytes (#size struct fuse_args)
-  liftIO $ do
-    (#poke struct fuse_args, argc) fuseArgs argc
-    (#poke struct fuse_args, argv) fuseArgs pArgv
-    (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
-  _ <- Res.register $ C.fuse_opt_free_args fuseArgs
-  pure fuseArgs
-
 -- | Allocates a @fuse_operations@ struct and pokes `FuseOperations` into it.
 --
 -- Each field of `FuseOperations` is converted into a C function pointer and is assigned
@@ -846,6 +800,52 @@ resCFuseOperations ops handler = do
           (#const SEEK_END) -> Right SeekFromEnd
           _ -> Left eINVAL
     either (pure . Left) (go filePath fh offset) emode
+
+data FuseConfig = FuseConfig
+  { -- | @entry_timeout@
+    entryTimeout :: Double
+  , -- | @negative_timeout@
+    negativeTimeout :: Double
+  , -- | @attr_timeout@
+    attrTimeout :: Double
+  , -- | @use_ino@
+    useIno :: Bool
+  }
+  deriving (Eq, Show)
+
+toCFuseConfig :: FuseConfig -> C.FuseConfig
+toCFuseConfig FuseConfig{..} = C.FuseConfig
+  { C.entryTimeout = CDouble entryTimeout
+  , C.negativeTimeout = CDouble negativeTimeout
+  , C.attrTimeout = CDouble attrTimeout
+  , C.useIno = if useIno then 1 else 0
+  }
+
+fromCFuseConfig :: C.FuseConfig -> FuseConfig
+fromCFuseConfig C.FuseConfig{..} = FuseConfig
+  { entryTimeout = unCDouble entryTimeout
+  , negativeTimeout = unCDouble negativeTimeout
+  , attrTimeout = unCDouble attrTimeout
+  , useIno = useIno /= 0
+  }
+  where
+  unCDouble (CDouble x) = x
+
+-- | Allocates a @fuse_args@ struct to hold commandline arguments.
+resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
+resFuseArgs prog args = do
+  let allArgs = (prog:args)
+      argc = length allArgs
+  cArgs <- traverse (fmap snd . resNewCString) allArgs
+  pArgv <- fmap snd $ resNewArray cArgs
+  -- TODO call FUSE_ARGS_INIT instead?
+  fuseArgs <- fmap snd $ resMallocBytes (#size struct fuse_args)
+  liftIO $ do
+    (#poke struct fuse_args, argc) fuseArgs argc
+    (#poke struct fuse_args, argv) fuseArgs pArgv
+    (#poke struct fuse_args, allocated) fuseArgs (0::CInt)
+  _ <- Res.register $ C.fuse_opt_free_args fuseArgs
+  pure fuseArgs
 
 -- | Calls @fuse_parse_cmdline@ to parse the part of the commandline arguments that
 -- we care about.
