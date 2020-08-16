@@ -942,9 +942,10 @@ fuseMainReal = \pFuse (foreground, mountPt) -> do
         then \io -> liftIO $ changeWorkingDirectory "/" >> io
         else fuseDaemonize . liftIO
   cMountPt <- fmap snd $ resNewFilePath mountPt
-  -- TODO handle failure! (return value /= 0) throw? return Left?
-  _ <- Res.allocate (C.fuse_mount pFuse cMountPt) (\_ -> C.fuse_unmount pFuse)
-  run $ procMain pFuse
+  mountResult <- snd <$> Res.allocate (C.fuse_mount pFuse cMountPt) (\_ -> C.fuse_unmount pFuse)
+  if mountResult == 0
+    then run $ procMain pFuse
+    else liftIO $ fail "fuse_mount failed"
   where
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse = do
