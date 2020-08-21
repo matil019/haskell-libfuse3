@@ -115,8 +115,9 @@ xmpOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno Fd)
 xmpOpen path mode flags = tryErrno $ openFd path mode Nothing flags
 
 xmpRead :: Fd -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
-xmpRead (Fd fd) size offset = tryErrno $ do
-  -- TODO compare performance vs mallocBytes + unsafePackMallocCString
+xmpRead (Fd fd) size offset = tryErrno $
+  -- instead of allocaBytes + packCStringLen, a pair of mallocBytes + unsafePackMallocCString
+  -- can be used to gain a small (~1%) decrease in running time
   allocaBytes (fromIntegral size) $ \buf -> do
     readBytes <- c_pread fd buf size offset
     B.packCStringLen (buf, fromIntegral readBytes)
