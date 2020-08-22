@@ -2,8 +2,6 @@
 -- | C land.
 --
 -- This is an internal module. It is exposed to allow fine-tuning and workarounds but its API is not stable.
---
--- Exported C called from Haskell
 module System.LibFuse3.Internal.C where
 
 import Data.Word (Word32, Word64)
@@ -142,7 +140,7 @@ data FuseFileInfo
 -- | @typedef fuse_fill_dir_t@
 type FuseFillDir = Ptr FuseFillDirBuf -> CString -> Ptr FileStat -> COff -> FuseFillDirFlags -> IO CInt
 
--- | @void@, used in `FuseFillDir`.
+-- | @Ptr FuseFillDirBuf = void *@, used in `FuseFillDir`.
 data FuseFillDirBuf
 
 -- | @enum fuse_fill_dir_flags@

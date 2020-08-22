@@ -12,7 +12,7 @@ import System.Posix.Types (CFsBlkCnt, CFsFilCnt, Fd(Fd))
 
 import qualified Foreign
 
--- | Passed to 'fuseGetFileSystemStats'.
+-- | Passed to `System.LibFuse3.fuseStatfs`.
 --
 -- The 'Storable' instance targets C @struct statvfs@.
 --

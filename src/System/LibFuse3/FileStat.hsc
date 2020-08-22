@@ -105,7 +105,7 @@ instance Storable FileStat where
 
 -- | The default value of `FileStat`.
 --
--- The Haskell Equivalent of zero-setting C code @struct stat st; memset(&st, 0, sizeof(struct stat))@.
+-- The Haskell Equivalent of zero-setting C code @{ struct stat st; memset(&st, 0, sizeof(struct stat)); }@.
 defaultFileStat :: FileStat
 defaultFileStat = FileStat 0 0 0 0 0 0 0 0 0 0 0
 

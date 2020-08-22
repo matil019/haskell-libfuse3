@@ -1,7 +1,6 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_HADDOCK no-print-missing-docs #-}
 -- | The core stuff
 --
 -- This is an internal module. It is exposed to allow fine-tuning and workarounds but its API is not stable.
@@ -17,6 +16,7 @@ import Data.Maybe (fromJust)
 import Foreign
   ( FunPtr
   , Ptr
+  , StablePtr
   , allocaBytes
   , castPtrToStablePtr
   , castStablePtrToPtr
@@ -35,7 +35,7 @@ import Foreign
   , pokeByteOff
   , with
   )
-import Foreign.C (CInt(CInt), CString, Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt(CInt), CString, Errno, eINVAL, eNOSYS, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -132,7 +132,7 @@ data SetxattrFlag
 --
 -- Calls @access@. Compared to `System.Posix.Files.fileAccess` and
 -- `System.Posix.Files.fileExist`, this function doesn't translate the errno and just
--- returns @()@ to indicate success.
+-- returns @()@ to indicate success, or throws an error to indicate failure.
 access :: FilePath -> AccessMode -> IO ()
 access path mode = do
   e <- accessErrno path mode
@@ -160,7 +160,8 @@ accessErrno path mode = withFilePath path $ \cPath -> do
 -- memo: when adding a new field, make sure to update resCFuseOperations
 -- | The file system operations.
 --
--- Each field is named against @struct fuse_operations@ in @fuse.h@.
+-- All operations are optional. Each field is named against @struct fuse_operations@ in
+-- @fuse.h@.
 --
 -- @fh@ is the file handle type returned by `fuseOpen`, and subsequently passed to all
 -- other file operations.
@@ -413,8 +414,9 @@ defaultFuseOps = FuseOperations
 --
 -- The created `C.FuseOperations` has the following invariants:
 --
---   - The content of @fuse_operations.fh@ is a Haskell value of type @StablePtr fh@. It
---     is created with `newFH`, accessed with `getFH` and released with `delFH`.
+--   - The content of @fuse_operations.fh@ is a Haskell value of type @StablePtr fh@ or
+--     @StablePtr dh@, depending on operations. It is created with `newFH`, accessed with
+--     `getFH` and released with `delFH`.
 --
 --   - Every methods handle Haskell exception with the supplied error handler.
 --
@@ -862,13 +864,19 @@ fuseParseCommandLine pArgs =
             cloneFd <- (#peek struct fuse_cmdline_opts, clone_fd) pOpts
             pure $ Right (foreground, mountPoint, cloneFd)
 
+-- | Parses the commandline arguments and exit if the args are bad or certain informational
+-- flag(s) are specified. See `fuseParseCommandLine`.
 fuseParseCommandLineOrExit :: Ptr C.FuseArgs -> IO FuseMainArgs
 fuseParseCommandLineOrExit pArgs = either exitWith pure =<< fuseParseCommandLine pArgs
 
--- | Haskell version of @fuse_daemonize@
+-- | Haskell version of @fuse_daemonize@.
+--
+-- During the fork, transfers all of the resources in `ResourceT` (and its cleanup actions)
+-- to the forked process.
 --
 -- Mimics @daemon()@'s use of @_exit()@ instead of @exit()@; we depend on this in
--- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground process exits.
+-- `fuseMainReal`, because otherwise we'll unmount the filesystem when the foreground
+-- process exits.
 fuseDaemonize :: ResourceT IO a -> ResourceT IO b
 fuseDaemonize job = daemonizeResourceT $ do
   liftIO $ do
@@ -900,10 +908,14 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
-type FuseMainArgs = (Bool, String, CInt) -- (foreground, mountpoint, clone_fd)
-  -- so far, we don't interpret the value of @clone_fd@ at all so @CInt`
+-- | The parts of @fuse_parse_cmdline@ we are interested in. Passed to `fuseMainReal`.
+--
+-- @(foreground, mountpoint, clone_fd)@
+--
+-- So far, we don't interpret the value of @clone_fd@ at all so its type is `CInt`.
+type FuseMainArgs = (Bool, String, CInt)
 
--- | Mounts the filesystem, forks, and then starts fuse.
+-- | Mounts the filesystem, forks (if requested), and then starts fuse.
 fuseMainReal
   :: Ptr C.StructFuse
   -> FuseMainArgs
@@ -951,22 +963,19 @@ fuseRun prog args ops handler = runResourceT $ do
 --
 -- This function does the following:
 --
---   * parses command line options (@-d@, @-s@ and @-h@) ;
+--   * parses command line options
 --
---   * passes all options after @--@ to the fusermount program ;
+--   * passes all options after @--@ to the fusermount program
 --
---   * mounts the filesystem by calling @fusermount@ ;
+--   * mounts the filesystem by calling @fusermount@
 --
---   * installs signal handlers for `Signals.keyboardSignal`,
---     `Signals.lostConnection`,
---     `Signals.softwareTermination` and
---     `Signals.openEndedPipe` ;
+--   * installs signal handlers
 --
---   * registers an exit handler to unmount the filesystem on program exit ;
+--   * registers an exit handler to unmount the filesystem on program exit
 --
---   * registers the operations ;
+--   * registers the operations
 --
---   * calls FUSE event loop.
+--   * calls FUSE event loop
 fuseMain :: Exception e => FuseOperations fh dh -> (e -> IO Errno) -> IO ()
 fuseMain ops handler = do
   -- this used to be implemented using libfuse's fuse_main. Doing this will fork()
@@ -1028,5 +1037,10 @@ delFH pFuseFileInfo = do
   unless (sptr == nullPtr) $
     freeStablePtr $ castPtrToStablePtr sptr
 
+-- | Materializes the callback of @readdir@ to marshal `fuseReaddir`.
 foreign import ccall "dynamic"
   peekFuseFillDir :: FunPtr C.FuseFillDir -> C.FuseFillDir
+
+-- | the dummy to please both ghc and haddock; don't use
+_dummy :: StablePtr a -> b
+_dummy _ = undefined eNOSYS

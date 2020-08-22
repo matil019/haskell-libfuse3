@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+-- | The Haskell-friendly interface of @struct fuse_config@.
 module System.LibFuse3.FuseConfig where
 
 import Foreign.C (CDouble(CDouble), CInt(CInt), CUInt(CUInt))
@@ -7,6 +8,9 @@ import System.Posix.Types (CGid(CGid), CMode(CMode), CUid(CUid), FileMode, Group
 
 import qualified System.LibFuse3.Internal.C as C
 
+-- | Configures the filesystem. Passed to `System.LibFuse3.fuseInit`.
+--
+-- See the module "System.LibFuse3.FuseConfig" for its fields.
 data FuseConfig = FuseConfig
   { -- | @set_gid@
     setGid :: Bool
@@ -53,6 +57,7 @@ data FuseConfig = FuseConfig
   }
   deriving (Eq, Show)
 
+-- | Converts to the Storable counterpart.
 toCFuseConfig :: FuseConfig -> C.FuseConfig
 toCFuseConfig FuseConfig{..} = C.FuseConfig
   { C.setGid           = boolToCInt setGid
@@ -80,6 +85,7 @@ toCFuseConfig FuseConfig{..} = C.FuseConfig
   where
   boolToCInt b = if b then 1 else 0
 
+-- | Converts from the Storable counterpart.
 fromCFuseConfig :: C.FuseConfig -> FuseConfig
 fromCFuseConfig C.FuseConfig{..} = FuseConfig
   { setGid           = cintToBool setGid

@@ -30,21 +30,26 @@ daemonizeResourceT res = do
     exitImmediately ExitSuccess
     undefined
 
+-- | `callocBytes` with `free` associated as a cleanup action.
 resCallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
 resCallocBytes n = allocate (callocBytes n) free
 
+-- | `mallocBytes` with `free` associated as a cleanup action.
 resMallocBytes :: Int -> ResourceT IO (ReleaseKey, Ptr a)
 resMallocBytes n = allocate (mallocBytes n) free
 
--- | Allocates a block of memory and marshals a value into it like `new`, associating `free` as a cleanup action.
+-- | `new` with `free` associated as a cleanup action.
 resNew :: Storable a => a -> ResourceT IO (ReleaseKey, Ptr a)
 resNew a = allocate (new a) free
 
+-- | `newCString` with `free` associated as a cleanup action.
 resNewCString :: String -> ResourceT IO (ReleaseKey, CString)
 resNewCString s = allocate (newCString s) free
 
+-- | `newFilePath` with `free` associated as a cleanup action.
 resNewFilePath :: FilePath -> ResourceT IO (ReleaseKey, CString)
 resNewFilePath path = allocate (newFilePath path) free
 
+-- | `newArray` with `free` associated as a cleanup action.
 resNewArray :: Storable a => [a] -> ResourceT IO (ReleaseKey, Ptr a)
 resNewArray as = allocate (newArray as) free
