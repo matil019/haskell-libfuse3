@@ -807,7 +807,7 @@ resFuseArgs prog args = do
       argc = length allArgs
   cArgs <- traverse (fmap snd . resNewCString) allArgs
   pArgv <- fmap snd $ resNewArray cArgs
-  -- TODO call FUSE_ARGS_INIT instead?
+  -- call FUSE_ARGS_INIT instead?
   fuseArgs <- fmap snd $ resMallocBytes (#size struct fuse_args)
   liftIO $ do
     (#poke struct fuse_args, argc) fuseArgs argc
