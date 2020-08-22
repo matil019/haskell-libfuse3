@@ -5,6 +5,17 @@
 - Executables using `libfuse3` should be compiled with the threaded runtime (`-threaded`).
 - Developed and tested on Linux only. Not tested on other UNIXes such as BSD and MacOS because I don't own them / machines to run them on.
 
+## Building from HEAD
+
+This packages uses the `./configure` script, but it is not checked into the git repository. To build the source checked out from git, you must generate it from `configure.ac` before invoking any of the `cabal` commands:
+
+```
+autoreconf -fiv
+# cabal v2-build, etc.
+```
+
+You may have to install `autotools` or something like that with your system package manager.
+
 ## Examples
 
 There are two examples, `null` and `passthrough` in the `example` directory. These are the ports of the examples in the official libfuse. They should be good start points for writing your filesystems.
