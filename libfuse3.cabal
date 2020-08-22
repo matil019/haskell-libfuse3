@@ -13,7 +13,7 @@ author:              matil019
 maintainer:          matil019 <yohashi1991@gmail.com>
 -- copyright:
 category:            System
-build-type:          Simple
+build-type:          Configure
 extra-source-files:
   CHANGELOG.md
   LICENSE-HFuse
@@ -45,9 +45,9 @@ library
                      , unix
   pkgconfig-depends:   fuse3
   hs-source-dirs:      src
+  include-dirs:        include
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
-  cc-options:          -DFUSE_USE_VERSION=31
 
 executable null
   if flag(examples)

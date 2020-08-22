@@ -17,6 +17,10 @@ import qualified System.Posix.Internals as Posix
 
 #include <fuse.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 -- | @struct fuse_args@
 data FuseArgs
 
@@ -245,7 +249,11 @@ instance Storable FuseOperations where
     fuseFlock         <- (#peek struct fuse_operations, flock)           ptr
     fuseFallocate     <- (#peek struct fuse_operations, fallocate)       ptr
     fuseCopyFileRange <- (#peek struct fuse_operations, copy_file_range) ptr
+#ifdef FUSE_HAS_LSEEK
     fuseLseek         <- (#peek struct fuse_operations, lseek)           ptr
+#else
+    let fuseLseek = nullFunPtr
+#endif
     pure FuseOperations{..}
 
   poke ptr FuseOperations{..} = do
@@ -290,7 +298,9 @@ instance Storable FuseOperations where
     (#poke struct fuse_operations, flock)           ptr fuseFlock
     (#poke struct fuse_operations, fallocate)       ptr fuseFallocate
     (#poke struct fuse_operations, copy_file_range) ptr fuseCopyFileRange
+#ifdef FUSE_HAS_LSEEK
     (#poke struct fuse_operations, lseek)           ptr fuseLseek
+#endif
 
 -- | An empty set of operations whose fields are @nullFunPtr@.
 defaultFuseOperations :: FuseOperations

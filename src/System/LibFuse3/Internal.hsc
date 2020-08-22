@@ -365,6 +365,8 @@ data FuseOperations fh dh = FuseOperations
     fuseCopyFileRange :: Maybe (FilePath -> fh -> FileOffset -> FilePath -> fh -> FileOffset -> ByteCount -> CInt -> IO (Either Errno CSsize))
 
   , -- | Implements 'System.Posix.IO.fdSeek' @lseek(3)@.
+    --
+    -- /Note:/ This is silently ignored if libfuse doesn't support @lseek@ operation (requires libfuse-3.8.0).
     fuseLseek :: Maybe (FilePath -> fh -> FileOffset -> SeekMode -> IO (Either Errno FileOffset))
   }
 

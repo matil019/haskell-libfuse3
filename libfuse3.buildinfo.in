@@ -1,0 +1,1 @@
+cc-options:          @DEFS@ -DFUSE_USE_VERSION=@FUSEVER@
