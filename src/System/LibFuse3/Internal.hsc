@@ -859,7 +859,8 @@ fuseParseCommandLine pArgs =
         | otherwise -> do
             mountPoint <- peekFilePath pMountPoint
             foreground <- (/= (0 :: CInt)) <$> (#peek struct fuse_cmdline_opts, foreground) pOpts
-            pure $ Right (foreground, mountPoint)
+            cloneFd <- (#peek struct fuse_cmdline_opts, clone_fd) pOpts
+            pure $ Right (foreground, mountPoint, cloneFd)
 
 fuseParseCommandLineOrExit :: Ptr C.FuseArgs -> IO FuseMainArgs
 fuseParseCommandLineOrExit pArgs = either exitWith pure =<< fuseParseCommandLine pArgs
@@ -899,31 +900,32 @@ withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
     void $ Signals.installHandler Signals.sigTERM Signals.Default Nothing
     void $ Signals.installHandler Signals.sigPIPE Signals.Default Nothing
 
-type FuseMainArgs = (Bool, String) -- (foreground, mountpoint)
+type FuseMainArgs = (Bool, String, CInt) -- (foreground, mountpoint, clone_fd)
+  -- so far, we don't interpret the value of @clone_fd@ at all so @CInt`
 
 -- | Mounts the filesystem, forks, and then starts fuse.
 fuseMainReal
   :: Ptr C.StructFuse
   -> FuseMainArgs
   -> ResourceT IO a
-fuseMainReal = \pFuse (foreground, mountPt) -> do
+fuseMainReal = \pFuse (foreground, mountPt, cloneFd) -> do
   let run = if foreground
         then \io -> liftIO $ changeWorkingDirectory "/" >> io
         else fuseDaemonize . liftIO
   cMountPt <- fmap snd $ resNewFilePath mountPt
   mountResult <- snd <$> Res.allocate (C.fuse_mount pFuse cMountPt) (\_ -> C.fuse_unmount pFuse)
   if mountResult == 0
-    then run $ procMain pFuse
+    then run $ procMain pFuse cloneFd
     else liftIO $ fail "fuse_mount failed"
   where
   -- here, we're finally inside the daemon process, we can run the main loop
-  procMain pFuse = do
+  procMain pFuse cloneFd = do
     session <- C.fuse_get_session pFuse
     -- TODO calling fuse_session_exit doesn't stop fuse_loop_mt_31!
     -- @fusermount -u@ successfully kills the process but SIGINT doesn't
     -- TODO try non-multithreaded loop
     withSignalHandlers (C.fuse_session_exit session) $ do
-      retVal <- C.fuse_loop_mt_31 pFuse 0 -- this 0 is @clone_fd@ argument TODO allow configuring this?
+      retVal <- C.fuse_loop_mt_31 pFuse cloneFd
       if retVal == 0
         then exitSuccess
         else exitFailure
