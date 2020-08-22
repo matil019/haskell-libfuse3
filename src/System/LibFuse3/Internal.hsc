@@ -725,8 +725,7 @@ resCFuseOperations ops handler = do
     go filePath dh (if isDataSync /= 0 then DataSync else FullSync)
 
   wrapInit :: (FuseConfig -> IO FuseConfig) -> C.CInit
-  -- TODO HFuse used `defaultExceptionHandler` instead of handler
-  -- TODO use parameters
+  -- TODO implement read/write of fuseConnInfo; watch out for read-only fields
   wrapInit go _fuseConnInfo pFuseConfig = do
     _ <- handle (void . handler) $ do
       -- @pFuseConfig@ is filled beforehand by fuse_opt_parse in libfuse so we pass it
@@ -740,7 +739,6 @@ resCFuseOperations ops handler = do
     pure nullPtr
 
   wrapDestroy :: IO () -> C.CDestroy
-  -- TODO HFuse used `defaultExceptionHandler` instead of handler
   wrapDestroy go _privateData = handle (void . handler) go
 
   wrapAccess :: (FilePath -> AccessMode -> IO Errno) -> C.CAccess
