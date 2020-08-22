@@ -16,6 +16,9 @@ license-file:        LICENSE
 build-type:          Simple
 extra-source-files:  CHANGELOG.md
 
+flag examples
+  default: False
+
 library
   exposed-modules:     System.LibFuse3
                        System.LibFuse3.FileStat
@@ -40,27 +43,35 @@ library
   cc-options:          -DFUSE_USE_VERSION=31
 
 executable null
+  if flag(examples)
+    buildable: True
+    build-depends:       libfuse3, base
+                       , bytestring
+                       , clock
+                       , unix
+  else
+    buildable: False
   main-is:             null.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       libfuse3, base
-                     , bytestring
-                     , clock
-                     , unix
   hs-source-dirs:      example
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
 
 executable passthrough
+  if flag(examples)
+    buildable: True
+    build-depends:       libfuse3, base
+                       , bytestring
+                       , clock
+                       , linux-xattr
+                       , time
+                       , unix
+  else
+    buildable: False
   main-is:             passthrough.hs
   other-modules:       CLoff
   -- other-extensions:
-  build-depends:       libfuse3, base
-                     , bytestring
-                     , clock
-                     , linux-xattr
-                     , time
-                     , unix
   hs-source-dirs:      example
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
