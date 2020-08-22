@@ -5,19 +5,26 @@ cabal-version:       >=1.10
 name:                libfuse3
 version:             0.1.0.0
 synopsis:            A Haskell binding for libfuse-3.x
--- description:
+description:         Bindings for libfuse, the FUSE userspace reference implementation, of version 3.x. Compatible with Linux.
 -- bug-reports:
 license:             MIT
 license-file:        LICENSE
--- author:
--- maintainer:
+author:              matil019
+maintainer:          matil019 <yohashi1991@gmail.com>
 -- copyright:
--- category:
+category:            System
 build-type:          Simple
-extra-source-files:  CHANGELOG.md
+extra-source-files:
+  CHANGELOG.md
+  LICENSE-HFuse
+  README.md
 
 flag examples
   default: False
+
+source-repository head
+  type:       git
+  location:   https://github.com/matil019/haskell-libfuse3
 
 library
   exposed-modules:     System.LibFuse3

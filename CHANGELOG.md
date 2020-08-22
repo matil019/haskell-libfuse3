@@ -1,4 +1,4 @@
-# Revision history for fuse3
+# Revision history for libfuse3
 
 ## 0.1.0.0 -- YYYY-mm-dd
 
