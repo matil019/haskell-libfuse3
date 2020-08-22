@@ -35,7 +35,7 @@ import Foreign
   , pokeByteOff
   , with
   )
-import Foreign.C (CInt(CInt), Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt(CInt), CString, Errno, eINVAL, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
@@ -419,7 +419,7 @@ defaultFuseOps = FuseOperations
 --   - Every methods handle Haskell exception with the supplied error handler.
 --
 --   - NULL filepaths (passed from libfuse if `FuseConfig.nullpathOk` is set) are
---     translated to empty strings. TODO implement this
+--     translated to empty strings.
 resCFuseOperations
   :: forall fh dh e
    . Exception e
@@ -487,9 +487,14 @@ resCFuseOperations ops handler = do
   handleAsFuseErrorIntegral :: Integral a => IO (Either Errno a) -> IO a
   handleAsFuseErrorIntegral = fmap (either (fromIntegral . negate . unErrno) id) . handle (fmap Left . handler)
 
+  peekFilePathOrEmpty :: CString -> IO FilePath
+  peekFilePathOrEmpty pFilePath
+    | pFilePath == nullPtr = pure ""
+    | otherwise            = peekFilePath pFilePath
+
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     mfh <- getFH pFuseFileInfo
     go filePath mfh >>= \case
       Left errno -> pure errno
@@ -550,19 +555,19 @@ resCFuseOperations ops handler = do
 
   wrapChmod :: (FilePath -> Maybe fh -> FileMode -> IO Errno) -> C.CChmod
   wrapChmod go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     mfh <- getFH pFuseFileInfo
     go filePath mfh mode
 
   wrapChown :: (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno) -> C.CChown
   wrapChown go pFilePath uid gid pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     mfh <- getFH pFuseFileInfo
     go filePath mfh uid gid
 
   wrapTruncate :: (FilePath -> Maybe fh -> FileOffset -> IO Errno) -> C.CTruncate
   wrapTruncate go pFilePath off pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     mfh <- getFH pFuseFileInfo
     go filePath mfh off
 
@@ -589,7 +594,7 @@ resCFuseOperations ops handler = do
 
   wrapRead :: (FilePath -> fh -> ByteCount -> FileOffset -> IO (Either Errno B.ByteString)) -> C.CRead
   wrapRead go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     fh <- getFHJust pFuseFileInfo
     go filePath fh bufSize off >>= \case
       Left errno -> pure $ Left errno
@@ -600,7 +605,7 @@ resCFuseOperations ops handler = do
 
   wrapWrite :: (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt)) -> C.CWrite
   wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     fh <- getFHJust pFuseFileInfo
     -- TODO use unsafePackCStringLen?
     buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
@@ -617,7 +622,7 @@ resCFuseOperations ops handler = do
 
   wrapFlush :: (FilePath -> fh -> IO Errno) -> C.CFlush
   wrapFlush go pFilePath pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     fh <- getFHJust pFuseFileInfo
     go filePath fh
 
@@ -625,14 +630,14 @@ resCFuseOperations ops handler = do
   wrapRelease go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
     go' = handleAsFuseError $ do
-      filePath <- peekFilePath pFilePath
+      filePath <- peekFilePathOrEmpty pFilePath
       fh <- getFHJust pFuseFileInfo
       go filePath fh
       pure eOK
 
   wrapFsync :: (FilePath -> fh -> SyncType -> IO Errno) -> C.CFsync
   wrapFsync go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     fh <- getFHJust pFuseFileInfo
     go filePath fh (if isDataSync /= 0 then DataSync else FullSync)
 
@@ -692,7 +697,7 @@ resCFuseOperations ops handler = do
 
   wrapReaddir :: (FilePath -> dh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     dh <- getFHJust pFuseFileInfo
     let fillDir = mkFillDir pFillDir
         fillEntry :: (FilePath, FileStat) -> IO ()
@@ -711,13 +716,13 @@ resCFuseOperations ops handler = do
   wrapReleasedir go pFilePath pFuseFileInfo = go' `finally` delFH pFuseFileInfo
     where
     go' = handleAsFuseError $ do
-      filePath <- peekFilePath pFilePath
+      filePath <- peekFilePathOrEmpty pFilePath
       dh <- getFHJust pFuseFileInfo
       go filePath dh
 
   wrapFsyncdir :: (FilePath -> dh -> SyncType -> IO Errno) -> C.CFsyncdir
   wrapFsyncdir go pFilePath isDataSync pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     dh <- getFHJust pFuseFileInfo
     go filePath dh (if isDataSync /= 0 then DataSync else FullSync)
 
@@ -776,7 +781,7 @@ resCFuseOperations ops handler = do
 
   wrapUtimens :: (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno) -> C.CUtimens
   wrapUtimens go pFilePath arrTs pFuseFileInfo = handleAsFuseError $ do
-    filePath <- peekFilePath pFilePath
+    filePath <- peekFilePathOrEmpty pFilePath
     mfh <- getFH pFuseFileInfo
     [atime, mtime] <- peekArray 2 arrTs
     go filePath mfh atime mtime
