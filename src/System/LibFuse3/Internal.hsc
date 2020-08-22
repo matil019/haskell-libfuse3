@@ -702,7 +702,7 @@ resCFuseOperations ops handler = do
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
     filePath <- peekFilePathOrEmpty pFilePath
     dh <- getFHJust pFuseFileInfo
-    let fillDir = mkFillDir pFillDir
+    let fillDir = peekFuseFillDir pFillDir
         fillEntry :: (FilePath, FileStat) -> IO ()
         fillEntry (fileName, fileStat) =
           withFilePath fileName $ \pFileName ->
@@ -1028,6 +1028,5 @@ delFH pFuseFileInfo = do
   unless (sptr == nullPtr) $
     freeStablePtr $ castPtrToStablePtr sptr
 
--- TODO rename this
 foreign import ccall "dynamic"
-  mkFillDir :: FunPtr C.FuseFillDir -> C.FuseFillDir
+  peekFuseFillDir :: FunPtr C.FuseFillDir -> C.FuseFillDir
