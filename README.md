@@ -1,4 +1,19 @@
-# libfuse3: A Haskell binding for libfuse-3.x
+# libfuse3: A Haskell binding to libfuse-3.x
+
+## Important notes
+
+- Executables using `libfuse3` should be compiled with the threaded runtime (`-threaded`).
+- Developed and tested on Linux only. Not tested on other UNIXes such as BSD and MacOS because I don't own them / machines to run them on.
+
+## Examples
+
+There are two examples, `null` and `passthrough` in the `example` directory. These are the ports of the examples in the official libfuse. They should be good start points for writing your filesystems.
+
+Enable the cabal flag to build them:
+
+```
+cabal v2-configure --flags=examples
+```
 
 ## Known issues and limitations
 
@@ -13,7 +28,9 @@ If you are able to implement any of these, that would be very appreciated! Pleas
 ## Related works
 
 - [libfuse][libfuse]: The reference implementation, to which this package binds
-- [HFuse][HFuse]: The bindings for libfuse-2.x
+- [HFuse][HFuse]: The bindings to libfuse-2.x
+  - `libfuse3` is based on `HFuse` (with massive rewrites).
+  - `libfuse3` has more complete API and exposes internal (and unstable) API to allow workarounds.
 - [fuse-rs][fuse-rs]: The Rust implementation of FUSE. Unlike this package, `fuse-rs` implements the FUSE protocol itself (i.e. replaces `libfuse`). See [its README](https://github.com/zargony/fuse-rs) for overview.
 
 [libfuse]: https://github.com/libfuse/libfuse
