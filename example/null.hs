@@ -8,7 +8,7 @@ import Data.List (foldl')
 import Foreign.C (CInt, Errno, eIO, eNOENT, eOK)
 import System.Clock (Clock(Realtime), getTime)
 import System.IO (hPrint, stderr)
-import System.LibFuse3 (FileStat, defaultFileStat, defaultFuseOps, fuseMain)
+import System.LibFuse3 (FileStat, defaultFileStat, defaultFuseOperations, fuseMain)
 import System.Posix.Files (groupReadMode, otherReadMode, ownerReadMode, ownerWriteMode, regularFileMode, unionFileModes)
 import System.Posix.Types (ByteCount, FileOffset)
 import System.Posix.User (getRealGroupID, getRealUserID)
@@ -54,7 +54,7 @@ nullWrite _   _   = pure $ Left eNOENT
 main :: IO ()
 main = fuseMain ops (\e -> hPrint stderr (e :: SomeException) >> pure eIO)
   where
-  ops = defaultFuseOps
+  ops = defaultFuseOperations
     { Fuse.fuseGetattr = Just $ \fp _ -> nullGetattr fp
     , Fuse.fuseTruncate = Just $ \fp _ _ -> nullTruncate fp
     , Fuse.fuseOpen = Just $ \fp _ _ -> nullOpen fp

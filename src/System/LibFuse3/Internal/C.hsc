@@ -292,6 +292,10 @@ instance Storable FuseOperations where
     (#poke struct fuse_operations, copy_file_range) ptr fuseCopyFileRange
     (#poke struct fuse_operations, lseek)           ptr fuseLseek
 
+-- | An empty set of operations whose fields are @nullFunPtr@.
+defaultFuseOperations :: FuseOperations
+defaultFuseOperations = FuseOperations nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr nullFunPtr
+
 -- | Merges two `FuseOperations` in a left-biased manner.
 mergeLFuseOperations :: FuseOperations -> FuseOperations -> FuseOperations
 mergeLFuseOperations

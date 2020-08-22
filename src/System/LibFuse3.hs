@@ -1,7 +1,7 @@
 -- | A Haskell binding to libfuse-3.x.
 module System.LibFuse3
   ( FuseOperations(..)
-  , defaultFuseOps
+  , defaultFuseOperations
 
   , FuseConfig
 

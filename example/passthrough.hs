@@ -177,7 +177,7 @@ xmpLseek :: Fd -> SeekMode -> FileOffset -> IO (Either Errno FileOffset)
 xmpLseek fd mode offset = tryErrno $ fdSeek fd mode offset
 
 xmpOper :: FuseOperations Fd Void
-xmpOper = defaultFuseOps
+xmpOper = defaultFuseOperations
   { fuseInit          = Just xmpInit
   , fuseGetattr       = Just $ \path _ -> xmpGetattr path
   , fuseAccess        = Just xmpAccess

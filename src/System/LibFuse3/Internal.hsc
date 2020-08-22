@@ -369,45 +369,8 @@ data FuseOperations fh dh = FuseOperations
   }
 
 -- | An empty set of operations whose fields are @Nothing@.
--- TODO rename to defaultFuseOperations
-defaultFuseOps :: FuseOperations fh dh
-defaultFuseOps = FuseOperations
-  { fuseGetattr = Nothing
-  , fuseReadlink = Nothing
-  , fuseMknod = Nothing
-  , fuseMkdir = Nothing
-  , fuseUnlink = Nothing
-  , fuseRmdir = Nothing
-  , fuseSymlink = Nothing
-  , fuseRename = Nothing
-  , fuseLink = Nothing
-  , fuseChmod = Nothing
-  , fuseChown = Nothing
-  , fuseTruncate = Nothing
-  , fuseOpen = Nothing
-  , fuseRead = Nothing
-  , fuseWrite = Nothing
-  , fuseStatfs = Nothing
-  , fuseFlush = Nothing
-  , fuseRelease = Nothing
-  , fuseFsync = Nothing
-  , fuseSetxattr = Nothing
-  , fuseGetxattr = Nothing
-  , fuseListxattr = Nothing
-  , fuseRemovexattr = Nothing
-  , fuseOpendir = Nothing
-  , fuseReaddir = Nothing
-  , fuseReleasedir = Nothing
-  , fuseFsyncdir = Nothing
-  , fuseInit = Nothing
-  , fuseDestroy = Nothing
-  , fuseAccess = Nothing
-  , fuseCreate = Nothing
-  , fuseUtimens = Nothing
-  , fuseFallocate = Nothing
-  , fuseCopyFileRange = Nothing
-  , fuseLseek = Nothing
-  }
+defaultFuseOperations :: FuseOperations fh dh
+defaultFuseOperations = FuseOperations Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 -- | Merges two `FuseOperations` in a left-biased manner.
 mergeLFuseOperations :: FuseOperations fh dh -> FuseOperations fh dh -> FuseOperations fh dh
