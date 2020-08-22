@@ -607,8 +607,7 @@ resCFuseOperations ops handler = do
   wrapWrite go pFilePath pBuf bufSize off pFuseFileInfo = handleAsFuseErrorResult $ do
     filePath <- peekFilePathOrEmpty pFilePath
     fh <- getFHJust pFuseFileInfo
-    -- TODO use unsafePackCStringLen?
-    buf <- B.packCStringLen (pBuf, fromIntegral bufSize)
+    buf <- BU.unsafePackCStringLen (pBuf, fromIntegral bufSize)
     go filePath fh buf off
 
   wrapStatfs :: (String -> IO (Either Errno FileSystemStats)) -> C.CStatfs
@@ -645,8 +644,7 @@ resCFuseOperations ops handler = do
   wrapSetxattr go pFilePath pName pValue valueSize cFlags = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
     name <- peekCString pName
-    -- TODO use unsafePackCStringLen?
-    value <- B.packCStringLen (pValue, fromIntegral valueSize)
+    value <- BU.unsafePackCStringLen (pValue, fromIntegral valueSize)
     let eflag = case cFlags of
           0 -> Right SetxattrDefault
           (#const XATTR_CREATE) -> Right SetxattrCreate
