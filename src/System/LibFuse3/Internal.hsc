@@ -1,5 +1,5 @@
-{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 -- | The core stuff
 --
@@ -45,7 +45,7 @@ import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSe
 import System.LibFuse3.FileStat (FileStat)
 import System.LibFuse3.FileSystemStats (FileSystemStats)
 import System.LibFuse3.FuseConfig (FuseConfig, fromCFuseConfig, toCFuseConfig)
-import System.LibFuse3.Internal.Resource (daemonizeResourceT, resCallocBytes, resMallocBytes, resNewArray, resNewCString, resNewFilePath)
+import System.LibFuse3.Internal.Resource (daemonizeResourceT, resMallocBytes, resNew, resNewArray, resNewCString, resNewFilePath)
 import System.LibFuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
@@ -401,43 +401,52 @@ resCFuseOperations
   -> (e -> IO Errno)                -- ^ An error handler that converts a Haskell exception to @errno@.
   -> ResourceT IO (Ptr C.FuseOperations)
 resCFuseOperations ops handler = do
-  pOps <- fmap snd $ resCallocBytes (#size struct fuse_operations)
-  resC C.mkGetattr    wrapGetattr    (fuseGetattr ops)    >>= liftIO . (#poke struct fuse_operations, getattr)    pOps
-  resC C.mkReadlink   wrapReadlink   (fuseReadlink ops)   >>= liftIO . (#poke struct fuse_operations, readlink)   pOps
-  resC C.mkMknod      wrapMknod      (fuseMknod ops)      >>= liftIO . (#poke struct fuse_operations, mknod)      pOps
-  resC C.mkMkdir      wrapMkdir      (fuseMkdir ops)      >>= liftIO . (#poke struct fuse_operations, mkdir)      pOps
-  resC C.mkUnlink     wrapUnlink     (fuseUnlink ops)     >>= liftIO . (#poke struct fuse_operations, unlink)     pOps
-  resC C.mkRmdir      wrapRmdir      (fuseRmdir ops)      >>= liftIO . (#poke struct fuse_operations, rmdir)      pOps
-  resC C.mkSymlink    wrapSymlink    (fuseSymlink ops)    >>= liftIO . (#poke struct fuse_operations, symlink)    pOps
-  resC C.mkRename     wrapRename     (fuseRename ops)     >>= liftIO . (#poke struct fuse_operations, rename)     pOps
-  resC C.mkLink       wrapLink       (fuseLink ops)       >>= liftIO . (#poke struct fuse_operations, link)       pOps
-  resC C.mkChmod      wrapChmod      (fuseChmod ops)      >>= liftIO . (#poke struct fuse_operations, chmod)      pOps
-  resC C.mkChown      wrapChown      (fuseChown ops)      >>= liftIO . (#poke struct fuse_operations, chown)      pOps
-  resC C.mkTruncate   wrapTruncate   (fuseTruncate ops)   >>= liftIO . (#poke struct fuse_operations, truncate)   pOps
-  resC C.mkOpen       wrapOpen       (fuseOpen ops)       >>= liftIO . (#poke struct fuse_operations, open)       pOps
-  resC C.mkRead       wrapRead       (fuseRead ops)       >>= liftIO . (#poke struct fuse_operations, read)       pOps
-  resC C.mkWrite      wrapWrite      (fuseWrite ops)      >>= liftIO . (#poke struct fuse_operations, write)      pOps
-  resC C.mkStatfs     wrapStatfs     (fuseStatfs ops)     >>= liftIO . (#poke struct fuse_operations, statfs)     pOps
-  resC C.mkFlush      wrapFlush      (fuseFlush ops)      >>= liftIO . (#poke struct fuse_operations, flush)      pOps
-  resC C.mkRelease    wrapRelease    (fuseRelease ops)    >>= liftIO . (#poke struct fuse_operations, release)    pOps
-  resC C.mkFsync      wrapFsync      (fuseFsync ops)      >>= liftIO . (#poke struct fuse_operations, fsync)      pOps
-  resC C.mkSetxattr   wrapSetxattr   (fuseSetxattr ops)   >>= liftIO . (#poke struct fuse_operations, setxattr)   pOps
-  resC C.mkGetxattr   wrapGetxattr   (fuseGetxattr ops)   >>= liftIO . (#poke struct fuse_operations, getxattr)   pOps
-  resC C.mkListxattr  wrapListxattr  (fuseListxattr ops)  >>= liftIO . (#poke struct fuse_operations, listxattr)  pOps
-  resC C.mkRemovexattr wrapRemovexattr (fuseRemovexattr ops) >>= liftIO . (#poke struct fuse_operations, removexattr) pOps
-  resC C.mkOpendir    wrapOpendir    (fuseOpendir ops)    >>= liftIO . (#poke struct fuse_operations, opendir)    pOps
-  resC C.mkReaddir    wrapReaddir    (fuseReaddir ops)    >>= liftIO . (#poke struct fuse_operations, readdir)    pOps
-  resC C.mkReleasedir wrapReleasedir (fuseReleasedir ops) >>= liftIO . (#poke struct fuse_operations, releasedir) pOps
-  resC C.mkFsyncdir   wrapFsyncdir   (fuseFsyncdir ops)   >>= liftIO . (#poke struct fuse_operations, fsyncdir)   pOps
-  resC C.mkInit       wrapInit       (fuseInit ops)       >>= liftIO . (#poke struct fuse_operations, init)       pOps
-  resC C.mkDestroy    wrapDestroy    (fuseDestroy ops)    >>= liftIO . (#poke struct fuse_operations, destroy)    pOps
-  resC C.mkAccess     wrapAccess     (fuseAccess ops)     >>= liftIO . (#poke struct fuse_operations, access)     pOps
-  resC C.mkCreate     wrapCreate     (fuseCreate ops)     >>= liftIO . (#poke struct fuse_operations, create)     pOps
-  resC C.mkUtimens    wrapUtimens    (fuseUtimens ops)    >>= liftIO . (#poke struct fuse_operations, utimens)    pOps
-  resC C.mkFallocate  wrapFallocate  (fuseFallocate ops)  >>= liftIO . (#poke struct fuse_operations, fallocate)  pOps
-  resC C.mkCopyFileRange wrapCopyFileRange (fuseCopyFileRange ops) >>= liftIO . (#poke struct fuse_operations, copy_file_range) pOps
-  resC C.mkLseek      wrapLseek      (fuseLseek ops)      >>= liftIO . (#poke struct fuse_operations, lseek)      pOps
-  pure pOps
+  fuseGetattr       <- resC C.mkGetattr       wrapGetattr       (fuseGetattr ops)
+  fuseReadlink      <- resC C.mkReadlink      wrapReadlink      (fuseReadlink ops)
+  fuseMknod         <- resC C.mkMknod         wrapMknod         (fuseMknod ops)
+  fuseMkdir         <- resC C.mkMkdir         wrapMkdir         (fuseMkdir ops)
+  fuseUnlink        <- resC C.mkUnlink        wrapUnlink        (fuseUnlink ops)
+  fuseRmdir         <- resC C.mkRmdir         wrapRmdir         (fuseRmdir ops)
+  fuseSymlink       <- resC C.mkSymlink       wrapSymlink       (fuseSymlink ops)
+  fuseRename        <- resC C.mkRename        wrapRename        (fuseRename ops)
+  fuseLink          <- resC C.mkLink          wrapLink          (fuseLink ops)
+  fuseChmod         <- resC C.mkChmod         wrapChmod         (fuseChmod ops)
+  fuseChown         <- resC C.mkChown         wrapChown         (fuseChown ops)
+  fuseTruncate      <- resC C.mkTruncate      wrapTruncate      (fuseTruncate ops)
+  fuseOpen          <- resC C.mkOpen          wrapOpen          (fuseOpen ops)
+  fuseRead          <- resC C.mkRead          wrapRead          (fuseRead ops)
+  fuseWrite         <- resC C.mkWrite         wrapWrite         (fuseWrite ops)
+  fuseStatfs        <- resC C.mkStatfs        wrapStatfs        (fuseStatfs ops)
+  fuseFlush         <- resC C.mkFlush         wrapFlush         (fuseFlush ops)
+  fuseRelease       <- resC C.mkRelease       wrapRelease       (fuseRelease ops)
+  fuseFsync         <- resC C.mkFsync         wrapFsync         (fuseFsync ops)
+  fuseSetxattr      <- resC C.mkSetxattr      wrapSetxattr      (fuseSetxattr ops)
+  fuseGetxattr      <- resC C.mkGetxattr      wrapGetxattr      (fuseGetxattr ops)
+  fuseListxattr     <- resC C.mkListxattr     wrapListxattr     (fuseListxattr ops)
+  fuseRemovexattr   <- resC C.mkRemovexattr   wrapRemovexattr   (fuseRemovexattr ops)
+  fuseOpendir       <- resC C.mkOpendir       wrapOpendir       (fuseOpendir ops)
+  fuseReaddir       <- resC C.mkReaddir       wrapReaddir       (fuseReaddir ops)
+  fuseReleasedir    <- resC C.mkReleasedir    wrapReleasedir    (fuseReleasedir ops)
+  fuseFsyncdir      <- resC C.mkFsyncdir      wrapFsyncdir      (fuseFsyncdir ops)
+  fuseInit          <- resC C.mkInit          wrapInit          (fuseInit ops)
+  fuseDestroy       <- resC C.mkDestroy       wrapDestroy       (fuseDestroy ops)
+  fuseAccess        <- resC C.mkAccess        wrapAccess        (fuseAccess ops)
+  fuseCreate        <- resC C.mkCreate        wrapCreate        (fuseCreate ops)
+  fuseUtimens       <- resC C.mkUtimens       wrapUtimens       (fuseUtimens ops)
+  fuseFallocate     <- resC C.mkFallocate     wrapFallocate     (fuseFallocate ops)
+  fuseCopyFileRange <- resC C.mkCopyFileRange wrapCopyFileRange (fuseCopyFileRange ops)
+  fuseLseek         <- resC C.mkLseek         wrapLseek         (fuseLseek ops)
+  fmap snd $ resNew C.FuseOperations
+    -- not (yet) implemented methods
+    { fuseLock = nullFunPtr
+    , fuseBmap = nullFunPtr
+    , fuseIoctl = nullFunPtr
+    , fusePoll = nullFunPtr
+    , fuseWriteBuf = nullFunPtr
+    , fuseReadBuf = nullFunPtr
+    , fuseFlock = nullFunPtr
+    , ..
+    }
   where
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
   resC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> ResourceT IO (FunPtr cfunc)
