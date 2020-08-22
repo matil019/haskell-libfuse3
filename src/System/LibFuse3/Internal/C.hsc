@@ -5,7 +5,7 @@
 module System.LibFuse3.Internal.C where
 
 import Data.Word (Word32, Word64)
-import Foreign (FunPtr, Ptr, Storable, peekByteOff, pokeByteOff)
+import Foreign (FunPtr, Ptr, Storable, nullFunPtr, peekByteOff, pokeByteOff)
 import Foreign.C (CDouble, CInt(CInt), CSize(CSize), CString, CUInt(CUInt))
 import System.Clock (TimeSpec)
 import System.LibFuse3.FileStat (FileStat)
@@ -291,6 +291,15 @@ instance Storable FuseOperations where
     (#poke struct fuse_operations, fallocate)       ptr fuseFallocate
     (#poke struct fuse_operations, copy_file_range) ptr fuseCopyFileRange
     (#poke struct fuse_operations, lseek)           ptr fuseLseek
+
+-- | Merges two `FuseOperations` in a left-biased manner.
+mergeLFuseOperations :: FuseOperations -> FuseOperations -> FuseOperations
+mergeLFuseOperations
+  (FuseOperations a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31 a32 a33 a34 a35 a36 a37 a38 a39 a40 a41 a42)
+  (FuseOperations b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 b16 b17 b18 b19 b20 b21 b22 b23 b24 b25 b26 b27 b28 b29 b30 b31 b32 b33 b34 b35 b36 b37 b38 b39 b40 b41 b42)
+  = FuseOperations (a1 `mergeL` b1) (a2 `mergeL` b2) (a3 `mergeL` b3) (a4 `mergeL` b4) (a5 `mergeL` b5) (a6 `mergeL` b6) (a7 `mergeL` b7) (a8 `mergeL` b8) (a9 `mergeL` b9) (a10 `mergeL` b10) (a11 `mergeL` b11) (a12 `mergeL` b12) (a13 `mergeL` b13) (a14 `mergeL` b14) (a15 `mergeL` b15) (a16 `mergeL` b16) (a17 `mergeL` b17) (a18 `mergeL` b18) (a19 `mergeL` b19) (a20 `mergeL` b20) (a21 `mergeL` b21) (a22 `mergeL` b22) (a23 `mergeL` b23) (a24 `mergeL` b24) (a25 `mergeL` b25) (a26 `mergeL` b26) (a27 `mergeL` b27) (a28 `mergeL` b28) (a29 `mergeL` b29) (a30 `mergeL` b30) (a31 `mergeL` b31) (a32 `mergeL` b32) (a33 `mergeL` b33) (a34 `mergeL` b34) (a35 `mergeL` b35) (a36 `mergeL` b36) (a37 `mergeL` b37) (a38 `mergeL` b38) (a39 `mergeL` b39) (a40 `mergeL` b40) (a41 `mergeL` b41) (a42 `mergeL` b42)
+  where
+  mergeL a b = if a == nullFunPtr then b else a
 
 -- | @struct fuse_pollhandle@
 data FusePollhandle
