@@ -16,7 +16,8 @@ import qualified Foreign
 --
 -- The 'Storable' instance targets C @struct statvfs@.
 --
--- @f_favail@, @f_fsid@ and @f_flag@ fields are ignored.
+-- @f_favail@, @f_fsid@ and @f_flag@ fields are ignored by libfuse, and their corresponding
+-- fields are not defined.
 data FileSystemStats = FileSystemStats
   { -- | Filesystem block size. @f_bsize@
     blockSize :: CULong

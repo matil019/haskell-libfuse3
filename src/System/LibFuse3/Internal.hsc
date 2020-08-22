@@ -216,9 +216,8 @@ data FuseOperations fh dh = FuseOperations
     -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
     -- @Nothing@ even if it is open.
     --
-    -- This method is expected to reset the setuid and setgid bits.
-    --
-    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    -- Unless @FUSE_CAP_HANDLE_KILLPRIV@ is disabled, this method is expected to reset the
+    -- setuid and setgid bits.
     fuseChown :: Maybe (FilePath -> Maybe fh -> UserID -> GroupID -> IO Errno)
 
   , -- | Implements 'System.Posix.Files.setFileSize' (POSIX @truncate(2)@).
@@ -226,9 +225,8 @@ data FuseOperations fh dh = FuseOperations
     -- @fh@ will always be @Nothing@ if the file is not currently open, but may also be
     -- @Nothing@ even if it is open.
     --
-    -- This method is expected to reset the setuid and setgid bits.
-    --
-    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    -- Unless @FUSE_CAP_HANDLE_KILLPRIV@ is disabled, this method is expected to reset the
+    -- setuid and setgid bits.
     fuseTruncate :: Maybe (FilePath -> Maybe fh -> FileOffset -> IO Errno)
 
   , -- | Implements 'System.Posix.Files.openFd' (POSIX @open(2)@).  On success, returns
@@ -237,11 +235,13 @@ data FuseOperations fh dh = FuseOperations
     --
     --   * Creation flags will be filtered out / handled by the kernel.
     --   * Access modes should be used by this to check if the operation is permitted.
-    --   * TODO if "writeback caching" is relevant, describe their caveats
-    --     http://libfuse.github.io/doxygen/structfuse__operations.html#a14b98c3f7ab97cc2ef8f9b1d9dc0709d
+    --   * The filesystem is expected to properly handle the @O_APPEND@ flag and ensure that
+    --     each write is appending to the end of the file.
+    --   * If this method returns @Left `eNOSYS`@ and @FUSE_CAP_NO_OPEN_SUPPORT@ is set in
+    --     @fuse_conn_info.capable@, this is treated as success and future calls to open
+    --     will also succeed without being sent to the filesystem process.
     --
-    -- TODO expose FuseFileInfo to allow setting direct_io and keep_cache?
-    -- TODO what about fuse_conn_info.capable stuff?
+    -- TODO allow this method to set @fuse_file_info.direct_io@ and @fuse_file_info.keep_cache@
     fuseOpen :: Maybe (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh))
 
   , -- | Implements Unix98 @pread(2)@.
@@ -253,12 +253,11 @@ data FuseOperations fh dh = FuseOperations
     --
     -- It differs from 'System.Posix.Files.fdWrite' by the explicit 'FileOffset' argument.
     --
-    -- This method is expected to reset the setuid and setgid bits.
-    --
-    -- TODO FUSE_CAP_HANDLE_KILLPRIV?
+    -- Unless @FUSE_CAP_HANDLE_KILLPRIV@ is disabled, this method is expected to reset the
+    -- setuid and setgid bits.
     fuseWrite :: Maybe (FilePath -> fh -> B.ByteString -> FileOffset -> IO (Either Errno CInt))
 
-  , -- | Implements @statfs(2)@. TODO describe ignored fields
+  , -- | Implements @statfs(2)@.
     fuseStatfs :: Maybe (String -> IO (Either Errno FileSystemStats))
 
   , -- | Called when @close(2)@ has been called on an open file.
@@ -339,7 +338,7 @@ data FuseOperations fh dh = FuseOperations
     -- See `fuseOpen` for notes on the flags.
     fuseCreate :: Maybe (FilePath -> OpenMode -> FileMode -> OpenFileFlags -> IO (Either Errno fh))
 
-    -- TODO , lock :: _
+    -- TODO , fuseLock :: _
 
   , -- | Implements @utimensat(2)@.
     --
@@ -349,12 +348,12 @@ data FuseOperations fh dh = FuseOperations
     -- @Nothing@ even if it is open.
     fuseUtimens :: Maybe (FilePath -> Maybe fh -> TimeSpec -> TimeSpec -> IO Errno)
 
-    -- TODO , bmap :: _
-    -- TODO , ioctl :: _
-    -- TODO , poll :: _
-    -- TODO , write_buf :: _
-    -- TODO , read_buf :: _
-    -- TODO , flock :: _
+    -- TODO , fuseBmap :: _
+    -- TODO , fuseIoctl :: _
+    -- TODO , fusePoll :: _
+    -- TODO , fuseWriteBuf :: _
+    -- TODO , fuseReadBuf :: _
+    -- TODO , fuseFlock :: _
 
   , -- | Implements 'System.Posix.Fcntl.fileAllocate' (@posix_fallocate(3)@). Allocates
     -- space for an open file.
