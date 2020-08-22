@@ -492,6 +492,22 @@ resCFuseOperations ops handler = do
     | pFilePath == nullPtr = pure ""
     | otherwise            = peekFilePath pFilePath
 
+  peekOpenFileFlagsAndMode :: Ptr C.FuseFileInfo -> IO (OpenFileFlags, OpenMode)
+  peekOpenFileFlagsAndMode pFuseFileInfo = do
+    (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
+    let openFileFlags = OpenFileFlags
+          { append   = testBitSet flags (#const O_APPEND)
+          , nonBlock = testBitSet flags (#const O_NONBLOCK)
+          , trunc    = testBitSet flags (#const O_TRUNC)
+          , exclusive = False
+          , noctty    = False
+          }
+        openMode
+          | testBitSet flags (#const O_RDWR)   = ReadWrite
+          | testBitSet flags (#const O_WRONLY) = WriteOnly
+          | otherwise = ReadOnly -- O_RDONLY
+    pure (openFileFlags, openMode)
+
   wrapGetattr :: (FilePath -> Maybe fh -> IO (Either Errno FileStat)) -> C.CGetattr
   wrapGetattr go pFilePath pStat pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePathOrEmpty pFilePath
@@ -574,18 +590,7 @@ resCFuseOperations ops handler = do
   wrapOpen :: (FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno fh)) -> C.COpen
   wrapOpen go pFilePath pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
-    let openFileFlags = OpenFileFlags
-          { append   = testBitSet flags (#const O_APPEND)
-          , nonBlock = testBitSet flags (#const O_NONBLOCK)
-          , trunc    = testBitSet flags (#const O_TRUNC)
-          , exclusive = False
-          , noctty    = False
-          }
-        openMode
-          | testBitSet flags (#const O_RDWR)   = ReadWrite
-          | testBitSet flags (#const O_WRONLY) = WriteOnly
-          | otherwise = ReadOnly -- O_RDONLY
+    (openFileFlags, openMode) <- peekOpenFileFlagsAndMode pFuseFileInfo
     go filePath openMode openFileFlags >>= \case
       Left errno -> pure errno
       Right fh -> do
@@ -756,19 +761,7 @@ resCFuseOperations ops handler = do
   wrapCreate :: (FilePath -> OpenMode -> FileMode -> OpenFileFlags -> IO (Either Errno fh)) -> C.CCreate
   wrapCreate go pFilePath mode pFuseFileInfo = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    -- TODO copy-pasted from wrapOpen
-    (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
-    let openFileFlags = OpenFileFlags
-          { append   = testBitSet flags (#const O_APPEND)
-          , nonBlock = testBitSet flags (#const O_NONBLOCK)
-          , trunc    = testBitSet flags (#const O_TRUNC)
-          , exclusive = False
-          , noctty    = False
-          }
-        openMode
-          | testBitSet flags (#const O_RDWR)   = ReadWrite
-          | testBitSet flags (#const O_WRONLY) = WriteOnly
-          | otherwise = ReadOnly -- O_RDONLY
+    (openFileFlags, openMode) <- peekOpenFileFlagsAndMode pFuseFileInfo
     go filePath openMode mode openFileFlags >>= \case
       Left errno -> pure errno
       Right fh -> do
