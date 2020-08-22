@@ -18,6 +18,10 @@ extra-source-files:
   CHANGELOG.md
   LICENSE-HFuse
   README.md
+  configure
+  configure.ac
+  include/config.h.in
+  libfuse3.buildinfo.in
 
 flag examples
   default: False

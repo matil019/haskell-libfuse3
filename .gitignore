@@ -1,2 +1,6 @@
+/aclocal.m4
+/autom4te.cache
+/configure
 /dist/
 /dist-newstyle/
+/include/config.h.in*
