@@ -184,8 +184,8 @@ data FuseOperations fh dh = FuseOperations
     --
     -- This function will also be called for regular file creation if `fuseCreate` is not defined.
     --
-    -- TODO remove EntryType parameter? because it's redundant (the same information is contained in FileMode)
-    fuseMknod :: Maybe (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno)
+    -- `fileModeToEntryType` is handy to pattern match on the request type of the node.
+    fuseMknod :: Maybe (FilePath -> FileMode -> DeviceID -> IO Errno)
 
   , -- | Implements 'System.Posix.Directory.createDirectory' (POSIX @mkdir(2)@).
     fuseMkdir :: Maybe (FilePath -> FileMode -> IO Errno)
@@ -509,10 +509,10 @@ resCFuseOperations ops handler = do
         pokeCStringLen0 (pBuf, (fromIntegral bufSize)) target
         pure eOK
 
-  wrapMknod :: (FilePath -> EntryType -> FileMode -> DeviceID -> IO Errno) -> C.CMknod
+  wrapMknod :: (FilePath -> FileMode -> DeviceID -> IO Errno) -> C.CMknod
   wrapMknod go pFilePath mode dev = handleAsFuseError $ do
     filePath <- peekFilePath pFilePath
-    go filePath (fileModeToEntryType mode) mode dev
+    go filePath mode dev
 
   wrapMkdir :: (FilePath -> FileMode -> IO Errno) -> C.CMkdir
   wrapMkdir go pFilePath mode = handleAsFuseError $ do
