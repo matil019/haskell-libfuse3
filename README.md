@@ -1,5 +1,7 @@
 # libfuse3: A Haskell binding to libfuse-3.x
 
+![GitHub Actions](https://github.com/matil019/haskell-libfuse3/workflows/Haskell%20CI/badge.svg?branch=master)
+
 ## Important notes
 
 - Executables using `libfuse3` should be compiled with the threaded runtime (`-threaded`).
