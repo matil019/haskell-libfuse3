@@ -1,0 +1,52 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    # libfuse3 requires ubuntu>=20.04
+    runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        ghc: ['8.4', '8.6', '8.8', '8.10']
+        cabal: ['3.2']
+
+    steps:
+    - name: Install libfuse3
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libfuse3-dev
+
+    - uses: actions/checkout@v2
+    - uses: actions/setup-haskell@v1.1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+
+    - name: Cache
+      uses: actions/cache@v1
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Build
+      run: |
+        autoreconf -fiv
+        cabal v2-update
+        cabal v2-configure --flags=examples --enable-tests --enable-benchmarks
+        cabal v2-build all
+    # there are no tests yet
+    # - name: Run tests
+    #   run: cabal v2-test all
