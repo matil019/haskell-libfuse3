@@ -86,3 +86,22 @@ executable passthrough
   hs-source-dirs:      example
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
+
+executable statjson
+  if flag(examples)
+    buildable: True
+    build-depends:       libfuse3, base
+                       , aeson
+                       , bytestring
+                       , clock
+                       , directory
+                       , filepath
+                       , unix
+  else
+    buildable: False
+  main-is:             statjson.hs
+  -- other-modules:
+  -- other-extensions:
+  hs-source-dirs:      example
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes -threaded
