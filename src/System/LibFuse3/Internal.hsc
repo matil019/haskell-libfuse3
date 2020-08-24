@@ -26,6 +26,7 @@ import Foreign
   , free
   , freeHaskellFunPtr
   , freeStablePtr
+  , maybeWith
   , newStablePtr
   , nullFunPtr
   , nullPtr
@@ -305,7 +306,13 @@ data FuseOperations fh dh = FuseOperations
     --
     -- The entire contents of the directory should be returned as a list of tuples
     -- (corresponding to the first mode of operation documented in @fuse.h@).
-    fuseReaddir :: Maybe (FilePath -> dh -> IO (Either Errno [(FilePath, FileStat)]))
+    --
+    -- The returned list should not contain entries of \".\" and \"..\".
+    --
+    -- Each element of the list is a pair of the name and the stat. The name should not
+    -- include the path to it. The implementation may return @Nothing@ as the stat; in this
+    -- case `fuseGetattr` is called instead.
+    fuseReaddir :: Maybe (FilePath -> dh -> IO (Either Errno [(String, Maybe FileStat)]))
 
   , -- | Implements @closedir(3)@.
     fuseReleasedir :: Maybe (FilePath -> dh -> IO Errno)
@@ -683,15 +690,15 @@ resCFuseOperations ops handler = do
         newFH pFuseFileInfo dh
         pure eOK
 
-  wrapReaddir :: (FilePath -> dh -> IO (Either Errno [(FilePath, FileStat)])) -> C.CReaddir
+  wrapReaddir :: (FilePath -> dh -> IO (Either Errno [(String, Maybe FileStat)])) -> C.CReaddir
   wrapReaddir go pFilePath pBuf pFillDir _off pFuseFileInfo _readdirFlags = handleAsFuseError $ do
     filePath <- peekFilePathOrEmpty pFilePath
     dh <- getFHJust pFuseFileInfo
     let fillDir = peekFuseFillDir pFillDir
-        fillEntry :: (FilePath, FileStat) -> IO ()
+        fillEntry :: (FilePath, Maybe FileStat) -> IO ()
         fillEntry (fileName, fileStat) =
           withFilePath fileName $ \pFileName ->
-          with fileStat $ \pFileStat -> do
+          maybeWith with fileStat $ \pFileStat -> do
             _ <- fillDir pBuf pFileName pFileStat 0 0
             pure ()
     go filePath dh >>= \case

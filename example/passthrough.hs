@@ -57,7 +57,7 @@ xmpAccess = accessErrno
 xmpReadlink :: FilePath -> IO (Either Errno FilePath)
 xmpReadlink = tryErrno . readSymbolicLink
 
-xmpReaddir :: FilePath -> IO (Either Errno [(FilePath, FileStat)])
+xmpReaddir :: FilePath -> IO (Either Errno [(String, Maybe FileStat)])
 xmpReaddir path = tryErrno
   $ bracket (openDirStream path) closeDirStream
   $ \dp -> fmap reverse $ flip fix []
@@ -65,9 +65,7 @@ xmpReaddir path = tryErrno
     entry <- readDirStream dp
     if null entry
       then pure acc
-      else do
-        st <- getFileStat $ if null path then entry else path <> "/" <> entry
-        loop $ (entry, st) : acc
+      else loop $ (entry, Nothing) : acc
 
 xmpMknod :: FilePath -> FileMode -> DeviceID -> IO Errno
 xmpMknod path mode rdev = tryErrno_ $ case fileModeToEntryType mode of
