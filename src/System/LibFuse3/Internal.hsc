@@ -307,7 +307,7 @@ data FuseOperations fh dh = FuseOperations
     -- The entire contents of the directory should be returned as a list of tuples
     -- (corresponding to the first mode of operation documented in @fuse.h@).
     --
-    -- The returned list should not contain entries of \".\" and \"..\".
+    -- The returned list should contain entries of \".\" and \"..\".
     --
     -- Each element of the list is a pair of the name and the stat. The name should not
     -- include the path to it. The implementation may return @Nothing@ as the stat; in this
