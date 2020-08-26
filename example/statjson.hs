@@ -128,7 +128,8 @@ generateFileStatJsonOps srcDir = OpsLayer
               -- borrow the original file's stat for the generated JSON's one
               origFileStat <- getFileStat $ srcDir <> origFilePath
               pure $ Respond $ removeWriteModes $ origFileStat
-                { fileSize = fromIntegral $ BL.length $ generateFileStatJson origFileStat
+                { fileMode = regularFileMode .|. fileMode origFileStat .&. stdFileMode
+                , fileSize = fromIntegral $ BL.length $ generateFileStatJson origFileStat
                 }
 
   , layerReaddir = \path -> tryErrno $ do
