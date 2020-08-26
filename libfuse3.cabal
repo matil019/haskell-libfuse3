@@ -42,11 +42,11 @@ library
   -- other-modules:
   -- other-extensions:
   build-depends:       base >=4.11 && <4.15
-                     , bytestring
-                     , clock
-                     , resourcet
-                     , time
-                     , unix
+                     , bytestring >=0.10.8 && <0.11
+                     , clock ==0.8.*
+                     , resourcet ==1.2.*
+                     , time >=1.6 && <1.10
+                     , unix ==2.7.*
   pkgconfig-depends:   fuse3
   hs-source-dirs:      src
   include-dirs:        include
@@ -75,7 +75,7 @@ executable passthrough
     build-depends:       libfuse3, base
                        , bytestring
                        , clock
-                       , linux-xattr
+                       , linux-xattr ==0.1.*
                        , time
                        , unix
   else
