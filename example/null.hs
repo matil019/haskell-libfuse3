@@ -1,5 +1,16 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
+-- |
+-- Copyright : (The original C)   2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+--             (The Haskell port) 2020 yohashi
+-- License   : GPL-2
+--
+-- This \"filesystem\" provides only a single file. The mountpoint
+-- needs to be a file rather than a directory. All writes to the
+-- file will be discarded, and reading the file always returns \\0.
+--
+-- This is a port of the C program distributed with the official libfuse.
+-- See \"example/null.c\" in the distribution.
 module Main where
 
 import Control.Exception (SomeException)

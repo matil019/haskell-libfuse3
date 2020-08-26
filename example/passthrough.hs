@@ -1,6 +1,18 @@
+-- |
+-- Copyright : (The original C)   2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+--                                2011       Sebastian Pipping <sebastian@pipping.org>
+--             (The Haskell port) 2020 yohashi
+-- License   : GPL-2
+--
+-- This file system mirrors the existing file system hierarchy of the
+-- system, starting at the root file system. This is implemented by
+-- just "passing through" all requests to the corresponding user-space
+-- libc functions. Its performance is terrible.
+--
+-- This is a port of the C program distributed with the official libfuse.
+-- See \"example/passthrough.c\" in the distribution.
 module Main where
 
--- TODO reexport things from System.Fuse3 to reduce imports
 import CLoff
 import Control.Exception (SomeException, bracket)
 import Data.ByteString (ByteString)
