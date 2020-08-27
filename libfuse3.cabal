@@ -9,8 +9,8 @@ description:         Bindings for libfuse, the FUSE userspace reference implemen
 -- bug-reports:
 license:             MIT
 license-file:        LICENSE
-author:              matil019
-maintainer:          matil019 <yohashi1991@gmail.com>
+author:              yohashi
+maintainer:          yohashi <yohashi1991@gmail.com>
 -- copyright:
 category:            System
 build-type:          Configure
