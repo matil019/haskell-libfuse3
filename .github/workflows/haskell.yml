@@ -45,8 +45,13 @@ jobs:
       run: |
         autoreconf -fiv
         cabal v2-update
+        # Compile the sdist archive instead of the source tree to make sure the all files are packaged in it
+        cabal v2-sdist
+        tar -xf dist-newstyle/sdist/libfuse3-*.tar.gz
+        cd libfuse3-*/
         cabal v2-configure --flags=examples --enable-tests --enable-benchmarks
         cabal v2-build all
+
     # there are no tests yet
     # - name: Run tests
     #   run: cabal v2-test all
