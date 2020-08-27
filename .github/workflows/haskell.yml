@@ -53,6 +53,16 @@ jobs:
         tar -xf dist-newstyle/sdist/libfuse3-*.tar.gz
         cd libfuse3-*/
         cabal v2-configure --flags=examples --enable-tests --enable-benchmarks --enable-documentation
+        # avoid building the documentations of the certain dependencies with ghc-8.4 because it crashes haddock
+        case "$(ghc --numeric-version)" in
+          8.4*)
+            echo ''                       >> cabal.project.local
+            echo 'package aeson'          >> cabal.project.local
+            echo '  documentation: False' >> cabal.project.local
+            ;;
+          *)
+            ;;
+        esac
         cabal v2-build all
         cabal v2-haddock
 
