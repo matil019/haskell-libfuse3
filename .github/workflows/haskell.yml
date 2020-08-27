@@ -53,6 +53,14 @@ jobs:
         cabal v2-build all
         cabal v2-haddock
 
+    - name: Check version bounds
+      run: |
+        cabal v2-build --allow-newer # generate dist-newstyle/cache/plan.json which cabal-bounds depends on
+        cabal v2-install cabal-bounds
+        ~/.cabal/bin/cabal-bounds format -o a.cabal
+        ~/.cabal/bin/cabal-bounds update -o b.cabal
+        diff a.cabal b.cabal
+
     # there are no tests yet
     # - name: Run tests
     #   run: cabal v2-test all
