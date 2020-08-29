@@ -923,9 +923,13 @@ fuseMainReal = \pFuse (foreground, mountPt, cloneFd) -> do
   -- here, we're finally inside the daemon process, we can run the main loop
   procMain pFuse cloneFd = do
     session <- C.fuse_get_session pFuse
-    -- TODO calling fuse_session_exit doesn't stop fuse_loop_mt_31!
-    -- @fusermount -u@ successfully kills the process but SIGINT doesn't
-    -- TODO try non-multithreaded loop
+    -- Due to some interaction between GHC runtime, calling fuse_session_exit once doesn't
+    -- stop fuse_loop_mt_31. On receiving a second signal the loop exits and the filesystem
+    -- is unmounted.
+    -- Adding the RTS option @--install-signal-handlers=no@ does not fix the issue.
+    --
+    -- On the other hand, @fusermount -u@ successfully unmounts the filesystem on the first
+    -- attempt.
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt_31 pFuse cloneFd
       if retVal == 0
