@@ -887,7 +887,7 @@ withSignalHandlers :: IO () -> IO a -> IO a
 withSignalHandlers exitHandler = bracket_ setHandlers resetHandlers
   where
   setHandlers = do
-    let sigHandler = Signals.CatchOnce exitHandler
+    let sigHandler = Signals.Catch exitHandler
     void $ Signals.installHandler Signals.sigINT  sigHandler Nothing
     void $ Signals.installHandler Signals.sigHUP  sigHandler Nothing
     void $ Signals.installHandler Signals.sigTERM sigHandler Nothing
