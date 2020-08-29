@@ -15,7 +15,9 @@ This package depends on the C library [libfuse][libfuse] and `pkg-config`. Pleas
 sudo apt-get update && sudo apt-get install libfuse3-dev pkg-config
 ```
 
-*NOTE:* `libfuse3-dev` is not available until Ubuntu-20.04 (a.k.a. "focal").
+**NOTE:** `libfuse3-dev` is not available until Ubuntu-20.04 (a.k.a. "focal").
+
+**NOTE2:** Not to be confused with `libfuse-dev` (whose version is 2.x). It can coexist with `libfuse3-dev`, but it is incompatible with this package.
 
 ## Building from HEAD
 
