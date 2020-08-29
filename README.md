@@ -7,6 +7,18 @@
 - Executables using `libfuse3` should be compiled with the threaded runtime (`-threaded`).
 - Developed and tested on Linux only. Not tested on other UNIXes such as BSD and MacOS because I don't own them / machines to run them on.
 
+## System dependencies
+
+This package depends on the C library [libfuse][libfuse] and `pkg-config`. Please install them with your system package manager before building this package. For example, on Ubuntu:
+
+```sh
+sudo apt-get update && sudo apt-get install libfuse3-dev pkg-config
+```
+
+**NOTE:** `libfuse3-dev` is not available until Ubuntu-20.04 (a.k.a. "focal").
+
+**NOTE2:** Not to be confused with `libfuse-dev` (whose version is 2.x). It can coexist with `libfuse3-dev`, but it is incompatible with this package.
+
 ## Building from HEAD
 
 This packages uses the `./configure` script, but it is not checked into the git repository. To build the source checked out from git, you must generate it from `configure.ac` before invoking any of the `cabal` commands:

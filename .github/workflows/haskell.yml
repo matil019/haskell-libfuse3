@@ -38,8 +38,9 @@ jobs:
         cache-name: cache-cabal
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-${{ matrix.ghc }}-
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
           ${{ runner.os }}-
@@ -69,7 +70,7 @@ jobs:
     - name: Check version bounds
       run: |
         cabal v2-build --allow-newer # generate dist-newstyle/cache/plan.json which cabal-bounds depends on
-        cabal v2-install cabal-bounds
+        cabal v2-install --overwrite-policy=always cabal-bounds
         ~/.cabal/bin/cabal-bounds format -o a.cabal
         ~/.cabal/bin/cabal-bounds update -o b.cabal
         diff a.cabal b.cabal
