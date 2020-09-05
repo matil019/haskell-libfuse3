@@ -928,7 +928,7 @@ fuseMainReal = \pFuse (foreground, mountPt, cloneFd) -> do
     -- is unmounted.
     -- Adding the RTS option @--install-signal-handlers=no@ does not fix the issue.
     --
-    -- On the other hand, @fusermount -u@ successfully unmounts the filesystem on the first
+    -- On the other hand, @fusermount3 -u@ successfully unmounts the filesystem on the first
     -- attempt.
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt_31 pFuse cloneFd
@@ -954,22 +954,6 @@ fuseRun prog args ops handler = runResourceT $ do
 -- This is all that has to be called from the @main@ function. On top of
 -- the `FuseOperations` record with filesystem implementation, you must give
 -- an exception handler converting Haskell exceptions to `Errno`.
---
--- This function does the following:
---
---   * parses command line options
---
---   * passes all options after @--@ to the fusermount program
---
---   * mounts the filesystem by calling @fusermount@
---
---   * installs signal handlers
---
---   * registers an exit handler to unmount the filesystem on program exit
---
---   * registers the operations
---
---   * calls FUSE event loop
 fuseMain :: Exception e => FuseOperations fh dh -> (e -> IO Errno) -> IO ()
 fuseMain ops handler = do
   -- this used to be implemented using libfuse's fuse_main. Doing this will fork()

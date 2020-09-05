@@ -44,7 +44,7 @@ cabal v2-configure --flags=examples
 
 - A signal needs to be sent twice to stop the process and unmount the filesystem.
   - This means you have to run `kill -2 <pid>` twice or hit `Ctrl-C` twice (if running in foreground).
-  - On the other hand, `fusermount -u` can unmount the filesystem on the first attempt.
+  - On the other hand, `fusermount3 -u` can unmount the filesystem on the first attempt.
 - Not all Haskell-friendly bindings to the FUSE operations are implemented yet, including but not limited to:
   - `struct fuse_conn_info`. The availability of filesystem capabilities such as `FUSE_CAP_HANDLE_KILLPRIV` can't be checked.
   - Setting the fields of `struct fuse_file_info` from the certain fuse operations.
