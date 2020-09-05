@@ -1,5 +1,9 @@
 # Revision history for libfuse3
 
+## 0.1.1.1 -- unreleased
+
+* Minor improvements on the documentations
+
 ## 0.1.1.0 -- 2020-08-29
 
 * Improve the situation with signals
