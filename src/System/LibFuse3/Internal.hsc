@@ -928,7 +928,7 @@ fuseMainReal = \pFuse (foreground, mountPt, cloneFd) -> do
     -- is unmounted.
     -- Adding the RTS option @--install-signal-handlers=no@ does not fix the issue.
     --
-    -- On the other hand, @fusermount -u@ successfully unmounts the filesystem on the first
+    -- On the other hand, @fusermount3 -u@ successfully unmounts the filesystem on the first
     -- attempt.
     withSignalHandlers (C.fuse_session_exit session) $ do
       retVal <- C.fuse_loop_mt_31 pFuse cloneFd
@@ -959,9 +959,9 @@ fuseRun prog args ops handler = runResourceT $ do
 --
 --   * parses command line options
 --
---   * passes all options after @--@ to the fusermount program
+--   * passes all options after @--@ to the fusermount3 program
 --
---   * mounts the filesystem by calling @fusermount@
+--   * mounts the filesystem by calling @fusermount3@
 --
 --   * installs signal handlers
 --
