@@ -1,3 +1,7 @@
+-- Please note that @cabal v2-test@ handles the test output very badly for some reason;
+-- the output is duplicated and interleaved.
+--
+-- Use @call v2-run -- integtest@ for more reliable output.
 module Main where
 
 import Control.Exception (SomeException, finally)

@@ -75,6 +75,5 @@ jobs:
         ~/.cabal/bin/cabal-bounds update -o b.cabal
         diff a.cabal b.cabal
 
-    # there are no tests yet
-    # - name: Run tests
-    #   run: cabal v2-test all
+    - name: Run tests
+      run: cabal v2-run -- integtest
