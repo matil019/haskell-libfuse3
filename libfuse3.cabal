@@ -59,6 +59,7 @@ test-suite integtest
   build-depends:       libfuse3, base
                      , HUnit
                      , bytestring
+                     , directory
                      , filepath
                      , process
                      , temporary

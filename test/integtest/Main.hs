@@ -3,6 +3,7 @@ module Main where
 import Control.Exception (SomeException, finally)
 import Data.Bits ((.|.))
 import Foreign.C (eIO, eNOENT)
+import System.Directory (listDirectory)
 import System.Environment (withArgs)
 import System.FilePath ((</>))
 import System.IO (hPrint, hPutStrLn, stderr)
@@ -80,7 +81,29 @@ fuseReadWithoutOpen = TestCase
   where
   content = B.singleton 0
 
+fuseReaddirWithoutOpendir :: TestCase fh dh
+fuseReaddirWithoutOpendir = TestCase
+  { testCaseOps = defaultFuseOperations
+    { fuseGetattr = Just $ \path _ ->
+        case () of
+          _ | path == "/dir/file" -> pure $ Right $ defaultFileStat
+                { fileMode = regularFileMode .|. 0o644
+                , fileSize = 1
+                }
+            | path == "/dir" -> pure $ Right $ defaultFileStat
+                { fileMode = directoryMode .|. 0o755
+                }
+            | otherwise -> pure $ Left eNOENT
+    , fuseReaddir = Just $ \path _dh -> path `seq` (pure $ Right $ [(".", Nothing), ("..", Nothing), ("file", Nothing)])
+    }
+
+  , testCaseProg = \mountPoint -> do
+      entries <- listDirectory $ mountPoint </> "dir"
+      assertEqual "fuseReaddirWithoutOpendir" ["file"] entries
+  }
+
 main :: IO ()
 main = do
   runTestCase getattrTest
   runTestCase fuseReadWithoutOpen
+  runTestCase fuseReaddirWithoutOpendir
