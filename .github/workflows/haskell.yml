@@ -72,7 +72,7 @@ jobs:
         cabal v2-build --allow-newer # generate dist-newstyle/cache/plan.json which cabal-bounds depends on
         cabal v2-install --overwrite-policy=always cabal-bounds
         ~/.cabal/bin/cabal-bounds format -o a.cabal
-        ~/.cabal/bin/cabal-bounds update -o b.cabal
+        ~/.cabal/bin/cabal-bounds update -o b.cabal --library
         diff a.cabal b.cabal
 
     - name: Run tests
