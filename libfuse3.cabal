@@ -57,6 +57,9 @@ test-suite integtest
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
   build-depends:       libfuse3, base
+                     , HUnit
+                     , bytestring
+                     , filepath
                      , process
                      , temporary
                      , unix

@@ -5,12 +5,16 @@ import Data.Bits ((.|.))
 import Data.Void (Void)
 import Foreign.C (eIO, eNOENT)
 import System.Environment (withArgs)
+import System.FilePath ((</>))
 import System.IO (hPrint, hPutStrLn, stderr)
 import System.IO.Temp (withSystemTempDirectory)
 import System.LibFuse3
-import System.Posix.Files (directoryMode)
+import System.Posix.Files (directoryMode, regularFileMode)
 import System.Posix.Process (getProcessStatus, forkProcess)
 import System.Process (callProcess)
+import Test.HUnit (assertEqual)
+
+import qualified Data.ByteString as B
 
 data TestCase fh dh = TestCase
   { testCaseOps :: FuseOperations fh dh
@@ -34,7 +38,7 @@ runTestCase TestCase{testCaseOps=ops, testCaseProg=prog} =
 getattrTest :: TestCase Void Void
 getattrTest =
   let stat = defaultFileStat
-        { fileMode = directoryMode .|. 0o644
+        { fileMode = directoryMode .|. 0o644 -- TODO 0o755
         , linkCount = 1
         }
 
@@ -53,5 +57,31 @@ getattrTest =
         print $ stat == stat''
   in TestCase ops prog
 
+-- | If `fuseOpen` is not defined, make sure that `fuseRead` doesn't throw unless
+-- the file handle is evaluated.
+fuseReadWithoutOpen :: TestCase fh dh
+fuseReadWithoutOpen = TestCase
+  { testCaseOps = defaultFuseOperations
+    { fuseGetattr = Just $ \path mfh ->
+        case mfh of
+          Just _ -> pure $ Left eIO -- this should never happen
+          Nothing
+            | path == "/file" -> pure $ Right $ defaultFileStat
+                { fileMode = regularFileMode .|. 0o644
+                , fileSize = 1
+                }
+            | otherwise -> pure $ Left eNOENT
+    , fuseRead = Just $ \path _fh len off -> path `seq` len `seq` off `seq` (pure $ Right content)
+    }
+
+  , testCaseProg = \mountPoint -> do
+      readContent <- B.readFile $ mountPoint </> "file"
+      assertEqual "fuseReadWithoutOpen" content readContent
+  }
+  where
+  content = B.singleton 0
+
 main :: IO ()
-main = runTestCase getattrTest
+main = do
+  runTestCase getattrTest
+  runTestCase fuseReadWithoutOpen
