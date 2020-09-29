@@ -12,7 +12,7 @@
 This package depends on the C library [libfuse][libfuse] and `pkg-config`. Please install them with your system package manager before building this package. For example, on Ubuntu:
 
 ```sh
-sudo apt-get update && sudo apt-get install libfuse3-dev pkg-config
+sudo apt-get update && sudo apt-get install libfuse3-dev fuse3 pkg-config
 ```
 
 **NOTE:** `libfuse3-dev` is not available until Ubuntu-20.04 (a.k.a. "focal").

@@ -24,7 +24,7 @@ jobs:
     - name: Install libfuse3
       run: |
         sudo apt-get update
-        sudo apt-get install -y libfuse3-dev
+        sudo apt-get install -y libfuse3-dev fuse3
 
     - uses: actions/checkout@v2
     - uses: actions/setup-haskell@v1.1
