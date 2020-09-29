@@ -12,17 +12,13 @@ import System.LibFuse3
 import System.Posix.Files (directoryMode, regularFileMode)
 import System.Posix.Process (getProcessStatus, forkProcess)
 import System.Process (callProcess)
-import Test.HUnit (assertEqual)
+import Test.Hspec (Spec, SpecWith, around, describe, hspec, it, shouldBe)
 
 import qualified Data.ByteString as B
 
-data TestCase fh dh = TestCase
-  { testCaseOps :: FuseOperations fh dh
-  , testCaseProg :: FilePath -> IO ()
-  }
-
-runTestCase :: TestCase fh dh -> IO ()
-runTestCase TestCase{testCaseOps=ops, testCaseProg=prog} =
+-- | Runs a spec on a FUSE filesystem mounted on a temporary directory.
+withFileSystem :: FuseOperations fh dh -> SpecWith FilePath -> Spec
+withFileSystem ops = around $ \theSpec ->
   withSystemTempDirectory "libfuse3test" $ \mountPoint -> do
     let unmount = do
           hPutStrLn stderr $ "unmounting : " <> mountPoint
@@ -33,77 +29,65 @@ runTestCase TestCase{testCaseOps=ops, testCaseProg=prog} =
       flip finally unmount $ do
         -- wait for fuseMain to daemonize
         _ <- getProcessStatus True False pid
-        prog mountPoint
-
-getattrTest :: TestCase fh dh
-getattrTest =
-  let stat = defaultFileStat
-        { fileMode = directoryMode .|. 0o644 -- TODO 0o755
-        , linkCount = 1
-        }
-
-      ops = defaultFuseOperations
-        { fuseGetattr = Just $ \path _ -> case path of
-            "/" -> pure $ Right stat
-            _ -> pure $ Left eNOENT
-        }
-
-      prog = \mountPoint -> do
-        -- assumes that `getFileStat` works correctly
-        stat' <- getFileStat mountPoint
-        -- ignore differences in fileID
-        -- TODO test use_ino?
-        let stat'' = stat' { fileID = fileID stat }
-        assertEqual "getattrTest" stat stat''
-  in TestCase ops prog
-
--- | If `fuseOpen` is not defined, make sure that `fuseRead` doesn't throw unless
--- the file handle is evaluated.
-fuseReadWithoutOpen :: TestCase fh dh
-fuseReadWithoutOpen = TestCase
-  { testCaseOps = defaultFuseOperations
-    { fuseGetattr = Just $ \path mfh ->
-        case mfh of
-          Just _ -> pure $ Left eIO -- this should never happen
-          Nothing
-            | path == "/file" -> pure $ Right $ defaultFileStat
-                { fileMode = regularFileMode .|. 0o644
-                , fileSize = 1
-                }
-            | otherwise -> pure $ Left eNOENT
-    , fuseRead = Just $ \path _fh len off -> path `seq` len `seq` off `seq` (pure $ Right content)
-    }
-
-  , testCaseProg = \mountPoint -> do
-      readContent <- B.readFile $ mountPoint </> "file"
-      assertEqual "fuseReadWithoutOpen" content readContent
-  }
-  where
-  content = B.singleton 0
-
-fuseReaddirWithoutOpendir :: TestCase fh dh
-fuseReaddirWithoutOpendir = TestCase
-  { testCaseOps = defaultFuseOperations
-    { fuseGetattr = Just $ \path _ ->
-        case () of
-          _ | path == "/dir/file" -> pure $ Right $ defaultFileStat
-                { fileMode = regularFileMode .|. 0o644
-                , fileSize = 1
-                }
-            | path == "/dir" -> pure $ Right $ defaultFileStat
-                { fileMode = directoryMode .|. 0o755
-                }
-            | otherwise -> pure $ Left eNOENT
-    , fuseReaddir = Just $ \path _dh -> path `seq` (pure $ Right $ [(".", Nothing), ("..", Nothing), ("file", Nothing)])
-    }
-
-  , testCaseProg = \mountPoint -> do
-      entries <- listDirectory $ mountPoint </> "dir"
-      assertEqual "fuseReaddirWithoutOpendir" ["file"] entries
-  }
+        theSpec mountPoint
 
 main :: IO ()
-main = do
-  runTestCase getattrTest
-  runTestCase fuseReadWithoutOpen
-  runTestCase fuseReaddirWithoutOpendir
+main = hspec $ do
+  describe "fuseGetattr" $
+    let stat = defaultFileStat
+          { fileMode = directoryMode .|. 0o755
+          , linkCount = 1
+          }
+        ops = defaultFuseOperations
+          { fuseGetattr = Just $ \path _ -> case path of
+              "/" -> pure $ Right stat
+              _ -> pure $ Left eNOENT
+          }
+    in withFileSystem ops $ it "getFileStat reads the stat as is" $ \mountPoint -> do
+         -- assumes that `getFileStat` works correctly
+         stat' <- getFileStat mountPoint
+         -- ignore differences in fileID
+         -- TODO test use_ino?
+         stat' { fileID = fileID stat } `shouldBe` stat
+
+  -- If `fuseOpen` is not defined, make sure that `fuseRead` doesn't throw unless
+  -- the file handle is evaluated.
+  describe "fuseRead without fuseOpen" $
+    let content = B.singleton 0
+        ops = defaultFuseOperations
+          { fuseGetattr = Just $ \path mfh ->
+              case mfh of
+                Just _ -> pure $ Left eIO -- this should never happen
+                Nothing
+                  | path == "/file" -> pure $ Right $ defaultFileStat
+                      { fileMode = regularFileMode .|. 0o644
+                      , fileSize = 1
+                      }
+                  | otherwise -> pure $ Left eNOENT
+          , fuseRead = Just $ \path _fh len off ->
+              path `seq` len `seq` off `seq` (pure $ Right content)
+          }
+    in withFileSystem ops $ it "fileRead reads without a crash" $ \mountPoint -> do
+         readContent <- B.readFile $ mountPoint </> "file"
+         readContent `shouldBe` content
+
+  -- If `fuseOpendir` is not defined, make sure that `fuseReaddir` doesn't throw unless
+  -- the directory handle is evaluated.
+  describe "fuseReaddir without fuseOpendir" $
+    let ops = defaultFuseOperations
+          { fuseGetattr = Just $ \path _ ->
+              case () of
+                _ | path == "/dir/file" -> pure $ Right $ defaultFileStat
+                      { fileMode = regularFileMode .|. 0o644
+                      , fileSize = 1
+                      }
+                  | path == "/dir" -> pure $ Right $ defaultFileStat
+                      { fileMode = directoryMode .|. 0o755
+                      }
+                  | otherwise -> pure $ Left eNOENT
+          , fuseReaddir = Just $ \path _dh ->
+              path `seq` (pure $ Right $ [(".", Nothing), ("..", Nothing), ("file", Nothing)])
+          }
+    in withFileSystem ops $ it "fileReaddir reads without a crash" $ \mountPoint -> do
+         entries <- listDirectory $ mountPoint </> "dir"
+         entries `shouldBe` ["file"]
