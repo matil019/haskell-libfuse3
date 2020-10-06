@@ -1,8 +1,10 @@
 # Revision history for libfuse3
 
-## 0.1.1.1 -- unreleased
+## 0.1.1.1 -- 2020-10-06
 
 * Minor improvements on the documentations
+* Add tests
+* Correct the version numbers in `configure.ac`
 
 ## 0.1.1.0 -- 2020-08-29
 
