@@ -27,7 +27,7 @@ jobs:
         sudo apt-get install -y libfuse3-dev fuse3
 
     - uses: actions/checkout@v2
-    - uses: actions/setup-haskell@v1.1
+    - uses: actions/setup-haskell@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
