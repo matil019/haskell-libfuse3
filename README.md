@@ -58,7 +58,7 @@ If you are able to fix/implement any of these, that would be very appreciated! P
 - [HFuse][HFuse]: The bindings to libfuse-2.x
   - `libfuse3` is based on `HFuse` (with massive rewrites).
   - `libfuse3` has more complete API and exposes internal (and unstable) API to allow workarounds.
-- [fuse-rs][fuse-rs]: The Rust implementation of FUSE. Unlike this package, `fuse-rs` implements the FUSE protocol itself (i.e. replaces `libfuse`). See [its README](https://github.com/zargony/fuse-rs) for overview.
+- [fuse-rs][fuse-rs]: The Rust implementation of FUSE. Unlike this package, `fuse-rs` implements the FUSE protocol itself, mostly reimplementing `libfuse` in Rust. See [its README](https://github.com/zargony/fuse-rs) for overview.
 
 [libfuse]: https://github.com/libfuse/libfuse
 [HFuse]: https://github.com/m15k/hfuse
