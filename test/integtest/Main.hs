@@ -5,10 +5,13 @@
 module Main where
 
 import Control.Exception (SomeException, finally)
+import Control.Monad (when)
 import Data.Bits ((.|.))
+import Data.Maybe (isNothing)
 import Foreign.C (eIO, eNOENT)
-import System.Directory (listDirectory)
+import System.Directory (findExecutable, listDirectory)
 import System.Environment (withArgs)
+import System.Exit (exitFailure)
 import System.FilePath ((</>))
 import System.IO (hPrint, hPutStrLn, stderr)
 import System.IO.Temp (withSystemTempDirectory)
@@ -35,8 +38,8 @@ withFileSystem ops = around $ \theSpec ->
         _ <- getProcessStatus True False pid
         theSpec mountPoint
 
-main :: IO ()
-main = hspec $ do
+specs :: Spec
+specs = do
   -- A basic test of fuseGetattr; we get what we give
   describe "fuseGetattr" $
     let stat = defaultFileStat
@@ -97,3 +100,11 @@ main = hspec $ do
     in withFileSystem ops $ it "fileReaddir reads without a crash" $ \mountPoint -> do
          entries <- listDirectory $ mountPoint </> "dir"
          entries `shouldBe` ["file"]
+
+main :: IO ()
+main = do
+  mfusermount3 <- findExecutable "fusermount3"
+  when (isNothing mfusermount3) $ do
+    hPutStrLn stderr "Command 'fusermount3' not found. Please install it first. It usually comes with a package named like 'fuse3'."
+    exitFailure
+  hspec specs
