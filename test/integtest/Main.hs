@@ -37,6 +37,7 @@ withFileSystem ops = around $ \theSpec ->
 
 main :: IO ()
 main = hspec $ do
+  -- A basic test of fuseGetattr; we get what we give
   describe "fuseGetattr" $
     let stat = defaultFileStat
           { fileMode = directoryMode .|. 0o755
@@ -69,6 +70,7 @@ main = hspec $ do
                       }
                   | otherwise -> pure $ Left eNOENT
           , fuseRead = Just $ \path _fh len off ->
+              -- check that evaluating the args other than the file handle is harmless
               path `seq` len `seq` off `seq` (pure $ Right content)
           }
     in withFileSystem ops $ it "fileRead reads without a crash" $ \mountPoint -> do
