@@ -24,10 +24,10 @@ jobs:
     - name: Install libfuse3
       run: |
         sudo apt-get update
-        sudo apt-get install -y libfuse3-dev
+        sudo apt-get install -y libfuse3-dev fuse3
 
     - uses: actions/checkout@v2
-    - uses: actions/setup-haskell@v1.1
+    - uses: actions/setup-haskell@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
@@ -72,9 +72,8 @@ jobs:
         cabal v2-build --allow-newer # generate dist-newstyle/cache/plan.json which cabal-bounds depends on
         cabal v2-install --overwrite-policy=always cabal-bounds
         ~/.cabal/bin/cabal-bounds format -o a.cabal
-        ~/.cabal/bin/cabal-bounds update -o b.cabal
+        ~/.cabal/bin/cabal-bounds update -o b.cabal --library
         diff a.cabal b.cabal
 
-    # there are no tests yet
-    # - name: Run tests
-    #   run: cabal v2-test all
+    - name: Run tests
+      run: cabal v2-run -- integtest

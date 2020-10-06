@@ -53,6 +53,23 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes
 
+test-suite integtest
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  build-depends:       libfuse3, base
+                     , bytestring
+                     , directory
+                     , filepath
+                     , hspec
+                     , process
+                     , temporary
+                     , unix
+  -- other-modules:
+  -- other-extensions:
+  hs-source-dirs:      test/integtest
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes -threaded
+
 executable null
   if flag(examples)
     buildable: True
