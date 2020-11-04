@@ -6,7 +6,7 @@ module System.LibFuse3.Utils
     testBitSet
 
   , -- * Errno
-    unErrno, ioErrorToErrno, tryErrno, tryErrno_
+    unErrno, ioErrorToErrno, throwErrnoOf, tryErrno, tryErrno_
 
   , -- * Marshalling strings
     pokeCStringLen0
@@ -21,15 +21,11 @@ import Data.Bits ((.&.), Bits)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Foreign (copyArray, pokeElemOff)
-import Foreign.C (CInt, CStringLen, Errno(Errno), eOK, errnoToIOError, throwErrno, withCStringLen)
+import Foreign.C (CInt, CStringLen, Errno(Errno), eOK, errnoToIOError, getErrno, throwErrno, withCStringLen)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
 import System.Clock (TimeSpec)
 
 import qualified System.Clock as TimeSpec
-
--- to have haddock link to proper entities
-_dummy :: dummy
-_dummy = error "dummy" errnoToIOError throwErrno
 
 -- | Unwraps the newtype `Errno`.
 unErrno :: Errno -> CInt
@@ -40,6 +36,22 @@ unErrno (Errno errno) = errno
 ioErrorToErrno :: IOError -> Maybe Errno
 ioErrorToErrno IOError{ioe_errno=Just e} = Just $ Errno e
 ioErrorToErrno _ = Nothing
+
+-- | Like `throwErrno` but takes an `Errno` as a parameter instead of reading from `getErrno`.
+--
+-- This is an inverse of `tryErrno`: TODO write a property test for this
+--
+-- @
+-- tryErrno (throwErrnoOf _ e) ≡ pure (Left e)
+-- @
+throwErrnoOf
+  :: String -- ^ textual description of the error location
+  -> Errno
+  -> IO a
+throwErrnoOf loc errno = ioError (errnoToIOError loc errno Nothing Nothing)
+  where
+  -- to supress unused warnings
+  _dummyToSuppressError = error "dummy" getErrno throwErrno
 
 -- | Catches an exception constructed with `errnoToIOError` and extracts `Errno` from it.
 tryErrno :: IO a -> IO (Either Errno a)
@@ -80,3 +92,5 @@ pokeCStringLen0 (pBuf, bufSize) src =
 -- @
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
+
+
