@@ -6,7 +6,7 @@ module System.LibFuse3.Utils
     testBitSet
 
   , -- * Errno
-    unErrno, ioErrorToErrno, throwErrnoOf, tryErrno, tryErrno_
+    unErrno, ioErrorToErrno, throwErrnoOf, tryErrno, tryErrno_, tryErrno', tryErrno_'
 
   , -- * Marshalling strings
     pokeCStringLen0
@@ -16,16 +16,20 @@ module System.LibFuse3.Utils
   )
   where
 
-import Control.Exception (tryJust)
+import Control.Exception (SomeException, try, tryJust)
 import Data.Bits ((.&.), Bits)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Foreign (copyArray, pokeElemOff)
-import Foreign.C (CInt, CStringLen, Errno(Errno), eOK, errnoToIOError, getErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt, CStringLen, Errno(Errno), eIO, eOK, errnoToIOError, getErrno, throwErrno, withCStringLen)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
 import System.Clock (TimeSpec)
 
 import qualified System.Clock as TimeSpec
+
+-- | Identical to @extra@'s @try_@
+try_ :: IO a -> IO (Either SomeException a)
+try_ = try
 
 -- | Unwraps the newtype `Errno`.
 unErrno :: Errno -> CInt
@@ -61,6 +65,14 @@ tryErrno = tryJust ioErrorToErrno
 -- If no exceptions, returns `eOK`.
 tryErrno_ :: IO a -> IO Errno
 tryErrno_ = fmap (either id (const eOK)) . tryErrno
+
+-- | Like `tryErrno` but also catches non-Errno errors to return `eIO`.
+tryErrno' :: IO a -> IO (Either Errno a)
+tryErrno' = fmap (either (const $ Left eIO) id) . try_ . tryErrno
+
+-- | Like `tryErrno_` but also catches non-Errno errors to return `eIO`.
+tryErrno_' :: IO a -> IO Errno
+tryErrno_' = fmap (either (const eIO) id) . try_ . tryErrno_
 
 -- | Converts a `TimeSpec` to a `POSIXTime`.
 --
