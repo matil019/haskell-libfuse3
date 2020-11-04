@@ -7,7 +7,7 @@
 module System.LibFuse3.Internal where
 
 import Control.Applicative ((<|>))
-import Control.Exception (Exception, SomeException, bracket_, finally, handle)
+import Control.Exception (Exception, SomeException, bracket_, finally, fromException, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -399,7 +399,9 @@ mergeLFuseOperations
 --     @StablePtr dh@, depending on operations. It is created with `newFH`, accessed with
 --     `getFH` and released with `delFH`.
 --
---   - Every methods handle Haskell exception with the supplied error handler.
+--   - Every methods handle Haskell exception with the supplied error handler. Any exceptions
+--     not catched by it are catched, logged and returns `eIO`. This means that `exitSuccess`
+--     /does not work/ inside `FuseOperations`.
 --
 --   - NULL filepaths (passed from libfuse if `FuseConfig.nullpathOk` is set) are
 --     translated to empty strings.
@@ -409,7 +411,7 @@ resCFuseOperations
   => FuseOperations fh dh
   -> ExceptionHandler e
   -> ResourceT IO (Ptr C.FuseOperations)
-resCFuseOperations ops handler = do
+resCFuseOperations ops handlerRaw = do
   fuseGetattr       <- resC C.mkGetattr       wrapGetattr       (fuseGetattr ops)
   fuseReadlink      <- resC C.mkReadlink      wrapReadlink      (fuseReadlink ops)
   fuseMknod         <- resC C.mkMknod         wrapMknod         (fuseMknod ops)
@@ -457,6 +459,12 @@ resCFuseOperations ops handler = do
     , ..
     }
   where
+  -- wraps the supplied handler to make sure no Haskell exceptions are propagated to the C land
+  handler :: ExceptionHandler SomeException
+  handler se = case fromException se of
+    Nothing -> defaultExceptionHandler se
+    Just e -> handlerRaw e
+
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
   resC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> ResourceT IO (FunPtr cfunc)
   resC _ _ Nothing = pure nullFunPtr
