@@ -50,8 +50,7 @@ throwErrnoOf
   -> IO a
 throwErrnoOf loc errno = ioError (errnoToIOError loc errno Nothing Nothing)
   where
-  -- to supress unused warnings
-  _dummyToSuppressError = error "dummy" getErrno throwErrno
+  _dummyToSuppressWarnings = error "dummy" getErrno throwErrno
 
 -- | Catches an exception constructed with `errnoToIOError` and extracts `Errno` from it.
 tryErrno :: IO a -> IO (Either Errno a)
