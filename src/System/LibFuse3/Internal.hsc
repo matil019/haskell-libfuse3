@@ -395,7 +395,7 @@ mergeLFuseOperations
 --
 -- The created `C.FuseOperations` has the following invariants:
 --
---   - The content of @fuse_operations.fh@ is a Haskell value of type @StablePtr fh@ or
+--   - The content of @fuse_file_info.fh@ is a Haskell value of type @StablePtr fh@ or
 --     @StablePtr dh@, depending on operations. It is created with `newFH`, accessed with
 --     `getFH` and released with `delFH`.
 --
