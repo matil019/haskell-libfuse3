@@ -1,5 +1,9 @@
 # Revision history for libfuse3
 
+## 0.1.2.0 -- Unreleased
+
+* Add `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils`
+
 ## 0.1.1.1 -- 2020-10-06
 
 * Minor improvements on the documentations
