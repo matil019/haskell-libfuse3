@@ -103,5 +103,3 @@ pokeCStringLen0 (pBuf, bufSize) src =
 -- @
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
-
-
