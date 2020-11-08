@@ -76,4 +76,6 @@ jobs:
         diff a.cabal b.cabal
 
     - name: Run tests
-      run: cabal v2-run -- integtest
+      run: |
+        cabal v2-run -- unittest
+        cabal v2-run -- integtest
