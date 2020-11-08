@@ -43,7 +43,7 @@ ioErrorToErrno _ = Nothing
 
 -- | Like `throwErrno` but takes an `Errno` as a parameter instead of reading from `getErrno`.
 --
--- This is an inverse of `tryErrno`: TODO write a property test for this
+-- This is an inverse of `tryErrno`:
 --
 -- @
 -- tryErrno (throwErrnoOf _ e) ≡ pure (Left e)
