@@ -792,6 +792,9 @@ resCFuseOperations ops handler = do
           _ -> Left eINVAL
     either (pure . Left) (go filePath fh offset) emode
 
+  _dummyToSuppressWarnings :: StablePtr a
+  _dummyToSuppressWarnings = error "dummy" eNOSYS
+
 -- | Allocates a @fuse_args@ struct to hold commandline arguments.
 resFuseArgs :: String -> [String] -> ResourceT IO (Ptr C.FuseArgs)
 resFuseArgs prog args = do
@@ -1018,7 +1021,3 @@ delFH pFuseFileInfo = do
 -- | Materializes the callback of @readdir@ to marshal `fuseReaddir`.
 foreign import ccall "dynamic"
   peekFuseFillDir :: FunPtr C.FuseFillDir -> C.FuseFillDir
-
--- | the dummy to please both ghc and haddock; don't use
-_dummy :: StablePtr a -> b
-_dummy _ = undefined eNOSYS
