@@ -967,7 +967,7 @@ fuseMain ops handler = do
   args <- getArgs
   fuseRun prog args ops handler
 
--- | An error handler which converts Haskell exceptions from FUSE methods to errno.
+-- | An exception handler which converts Haskell exceptions from `FuseOperations` methods to `Errno`.
 type ExceptionHandler e = e -> IO Errno
 
 -- | Catches any exception, logs it to stderr, and returns `eIO`.
