@@ -29,6 +29,8 @@ module System.LibFuse3
   , module System.LibFuse3.Utils
 
   , fuseMain
+  , ExceptionHandler
+  , defaultExceptionHandler
   )
   where
 

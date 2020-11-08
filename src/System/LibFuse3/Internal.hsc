@@ -7,7 +7,7 @@
 module System.LibFuse3.Internal where
 
 import Control.Applicative ((<|>))
-import Control.Exception (Exception, bracket_, finally, handle)
+import Control.Exception (Exception, SomeException, bracket_, finally, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -37,12 +37,12 @@ import Foreign
   , pokeByteOff
   , with
   )
-import Foreign.C (CInt(CInt), CString, Errno, eINVAL, eNOSYS, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt(CInt), CString, Errno, eFAULT, eINVAL, eIO, eNOSYS, eOK, getErrno, peekCString, resetErrno, throwErrno, withCStringLen)
 import GHC.IO.Handle (hDuplicateTo)
 import System.Clock (TimeSpec)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode(ExitFailure, ExitSuccess), exitFailure, exitSuccess, exitWith)
-import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), stderr, stdin, stdout, withFile)
+import System.IO (IOMode(ReadMode, WriteMode), SeekMode(AbsoluteSeek, RelativeSeek, SeekFromEnd), hPutStrLn, stderr, stdin, stdout, withFile)
 import System.LibFuse3.FileStat (FileStat)
 import System.LibFuse3.FileSystemStats (FileSystemStats)
 import System.LibFuse3.FuseConfig (FuseConfig, fromCFuseConfig, toCFuseConfig)
@@ -406,8 +406,8 @@ mergeLFuseOperations
 resCFuseOperations
   :: forall fh dh e
    . Exception e
-  => FuseOperations fh dh           -- ^ A set of file system operations.
-  -> (e -> IO Errno)                -- ^ An error handler that converts a Haskell exception to @errno@.
+  => FuseOperations fh dh
+  -> ExceptionHandler e
   -> ResourceT IO (Ptr C.FuseOperations)
 resCFuseOperations ops handler = do
   fuseGetattr       <- resC C.mkGetattr       wrapGetattr       (fuseGetattr ops)
@@ -940,7 +940,7 @@ fuseMainReal = \pFuse (foreground, mountPt, cloneFd) -> do
         else exitFailure
 
 -- | Parses the commandline arguments and runs fuse.
-fuseRun :: Exception e => String -> [String] -> FuseOperations fh dh -> (e -> IO Errno) -> IO a
+fuseRun :: Exception e => String -> [String] -> FuseOperations fh dh -> ExceptionHandler e -> IO a
 fuseRun prog args ops handler = runResourceT $ do
   pArgs <- resFuseArgs prog args
   mainArgs <- liftIO $ fuseParseCommandLineOrExit pArgs
@@ -957,7 +957,7 @@ fuseRun prog args ops handler = runResourceT $ do
 -- This is all that has to be called from the @main@ function. On top of
 -- the `FuseOperations` record with filesystem implementation, you must give
 -- an exception handler converting Haskell exceptions to `Errno`.
-fuseMain :: Exception e => FuseOperations fh dh -> (e -> IO Errno) -> IO ()
+fuseMain :: Exception e => FuseOperations fh dh -> ExceptionHandler e -> IO ()
 fuseMain ops handler = do
   -- this used to be implemented using libfuse's fuse_main. Doing this will fork()
   -- from C behind the GHC runtime's back, which deadlocks in GHC 6.8.
@@ -966,6 +966,22 @@ fuseMain ops handler = do
   prog <- getProgName
   args <- getArgs
   fuseRun prog args ops handler
+
+-- | An exception handler which converts Haskell exceptions from `FuseOperations` methods to `Errno`.
+type ExceptionHandler e = e -> IO Errno
+
+-- | Catches any exception, logs it to stderr, and returns `eIO`.
+--
+-- Suitable as a default exception handler.
+--
+-- __NOTE 1__ This differs from the one in the @HFuse@ package which returns `eFAULT`.
+--
+-- __NOTE 2__ If the filesystem is daemonized (as default), the exceptions will not be logged because
+-- stderr is redirected to @\/dev\/null@.
+defaultExceptionHandler :: ExceptionHandler SomeException
+defaultExceptionHandler e = hPutStrLn stderr (show e) >> pure eIO
+  where
+  _dummyToSuppressWarnings = error "dummy" eFAULT
 
 -- | Gets a file handle from `C.FuseFileInfo` which is embedded with `newFH`.
 --
