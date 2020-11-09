@@ -25,7 +25,7 @@ import Data.ByteString (ByteString)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
 import Foreign (Ptr, allocaBytes, copyArray, pokeElemOff)
-import Foreign.C (CInt(CInt), CSize(CSize), CStringLen, Errno(Errno), eIO, eOK, errnoToIOError, getErrno, throwErrno, withCStringLen)
+import Foreign.C (CInt(CInt), CSize(CSize), CStringLen, Errno(Errno), eIO, eOK, errnoToIOError, getErrno, throwErrno, throwErrnoIfMinus1, withCStringLen)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
 import System.Clock (TimeSpec)
 import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), Fd(Fd), FileOffset)
@@ -112,17 +112,23 @@ testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
 
 -- | Reads from a file descriptor at a given offset.
+--
+-- Fewer bytes may be read than requested.
+-- On error, throws an `IOError` corresponding to the errno.
 pread :: Fd -> ByteCount -> FileOffset -> IO ByteString
 pread (Fd fd) size off =
   allocaBytes (fromIntegral size) $ \buf -> do
-    readBytes <- c_pread fd buf size off
+    readBytes <- throwErrnoIfMinus1 "pread" $ c_pread fd buf size off
     B.packCStringLen (buf, fromIntegral readBytes)
 
 -- | Writes to a file descriptor at a given offset.
+--
+-- Returns the number of bytes written. Fewer bytes may be written than requested.
+-- On error, throws an `IOError` corresponding to the errno.
 pwrite :: Fd -> ByteString -> FileOffset -> IO CSsize
 pwrite (Fd fd) bs off =
   BU.unsafeUseAsCStringLen bs $ \(buf, size) ->
-    c_pwrite fd buf (fromIntegral size) off
+    throwErrnoIfMinus1 "pwrite" $ c_pwrite fd buf (fromIntegral size) off
 
 -- | A foreign import of @pread(2)@
 foreign import ccall "pread"
