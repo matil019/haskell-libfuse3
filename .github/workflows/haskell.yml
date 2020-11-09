@@ -53,7 +53,7 @@ jobs:
         cabal v2-sdist
         tar -xf dist-newstyle/sdist/libfuse3-*.tar.gz
         cd libfuse3-*/
-        cabal v2-configure --flags=examples --enable-tests --enable-benchmarks --enable-documentation
+        cabal v2-configure --flags=examples --enable-tests --enable-documentation
         # avoid building the documentations of the certain dependencies with ghc-8.4 because it crashes haddock
         case "$(ghc --numeric-version)" in
           8.4*)

@@ -19,7 +19,7 @@ import Data.ByteString (ByteString)
 import Data.Function (fix)
 import Data.Time.Clock.POSIX (POSIXTime)
 import Data.Void (Void)
-import Foreign (Ptr, allocaBytes, with)
+import Foreign (Ptr, with)
 import Foreign.C (CInt(CInt), CSize(CSize), CUInt(CUInt), Errno(Errno), eIO, eOK, eOPNOTSUPP)
 import System.IO (SeekMode, hPrint, stderr)
 import System.LibFuse3
@@ -29,15 +29,7 @@ import System.Posix.Files (createDevice, createLink, createNamedPipe, createSymb
 import System.Posix.IO (OpenFileFlags, OpenMode(WriteOnly), closeFd, defaultFileFlags, exclusive, fdSeek, openFd)
 import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(Fd), FileMode, FileOffset, GroupID, UserID)
 
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Unsafe as BU
 import qualified System.LibFuse3.FuseConfig as FuseConfig
-
-foreign import ccall "pread"
-  c_pread :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
-
-foreign import ccall "pwrite"
-  c_pwrite :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
 
 foreign import ccall "posix_fallocate"
   c_posix_fallocate :: CInt -> COff -> COff -> IO CInt
@@ -125,18 +117,10 @@ xmpOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno Fd)
 xmpOpen path mode flags = tryErrno $ openFd path mode Nothing flags
 
 xmpRead :: Fd -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
-xmpRead (Fd fd) size offset = tryErrno $
-  -- instead of allocaBytes + packCStringLen, a pair of mallocBytes + unsafePackMallocCString
-  -- can be used to gain a small (~1%) decrease in running time
-  allocaBytes (fromIntegral size) $ \buf -> do
-    readBytes <- c_pread fd buf size offset
-    B.packCStringLen (buf, fromIntegral readBytes)
+xmpRead fd size offset = tryErrno $ pread fd size offset
 
 xmpWrite :: Fd -> ByteString -> FileOffset -> IO (Either Errno CInt)
-xmpWrite (Fd fd) bs offset = tryErrno $
-  BU.unsafeUseAsCStringLen bs $ \(buf, size) ->
-    -- truncate CSsize (ssize_t = 64bit) to CInt (32bit) because there is no other way
-    fromIntegral <$> c_pwrite fd buf (fromIntegral size) offset
+xmpWrite fd bs offset = tryErrno $ fromIntegral <$> pwrite fd bs offset
 
 xmpStatfs :: FilePath -> IO (Either Errno FileSystemStats)
 xmpStatfs = tryErrno . getFileSystemStats

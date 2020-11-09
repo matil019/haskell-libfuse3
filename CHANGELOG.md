@@ -2,9 +2,10 @@
 
 ## 0.1.2.0 -- Unreleased
 
-* Add `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils`
-* Add `ExceptionHandler` and `defaultExceptionHandler`
-* Fix a bug in `resCFuseOperations` to prevent Haskell exceptions from escaping to C land
+* Added `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils` (#5)
+* Added `ExceptionHandler` and `defaultExceptionHandler` (#6)
+* Fixed a bug in `resCFuseOperations` to prevent Haskell exceptions from escaping to C land (#7)
+* Added `pread` and `pwrite` to `System.Libfuse3.Utils` (#8)
 
 ## 0.1.1.1 -- 2020-10-06
 

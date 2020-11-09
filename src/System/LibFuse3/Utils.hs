@@ -8,6 +8,9 @@ module System.LibFuse3.Utils
   , -- * Errno
     unErrno, ioErrorToErrno, throwErrnoOf, tryErrno, tryErrno_, tryErrno', tryErrno_'
 
+  , -- * File I/O
+    pread, pwrite, c_pread, c_pwrite
+
   , -- * Marshalling strings
     pokeCStringLen0
 
@@ -18,13 +21,17 @@ module System.LibFuse3.Utils
 
 import Control.Exception (SomeException, try, tryJust)
 import Data.Bits ((.&.), Bits)
+import Data.ByteString (ByteString)
 import Data.Ratio ((%))
 import Data.Time.Clock.POSIX (POSIXTime)
-import Foreign (copyArray, pokeElemOff)
-import Foreign.C (CInt, CStringLen, Errno(Errno), eIO, eOK, errnoToIOError, getErrno, throwErrno, withCStringLen)
+import Foreign (Ptr, allocaBytes, copyArray, pokeElemOff)
+import Foreign.C (CInt(CInt), CSize(CSize), CStringLen, Errno(Errno), eIO, eOK, errnoToIOError, getErrno, throwErrno, throwErrnoIfMinus1, withCStringLen)
 import GHC.IO.Exception (IOException(IOError, ioe_errno))
 import System.Clock (TimeSpec)
+import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), Fd(Fd), FileOffset)
 
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as BU
 import qualified System.Clock as TimeSpec
 
 -- | Identical to @extra@'s @try_@
@@ -103,3 +110,30 @@ pokeCStringLen0 (pBuf, bufSize) src =
 -- @
 testBitSet :: Bits a => a -> a -> Bool
 testBitSet bits mask = bits .&. mask == mask
+
+-- | Reads from a file descriptor at a given offset.
+--
+-- Fewer bytes may be read than requested.
+-- On error, throws an t`IOError` corresponding to the errno.
+pread :: Fd -> ByteCount -> FileOffset -> IO ByteString
+pread (Fd fd) size off =
+  allocaBytes (fromIntegral size) $ \buf -> do
+    readBytes <- throwErrnoIfMinus1 "pread" $ c_pread fd buf size off
+    B.packCStringLen (buf, fromIntegral readBytes)
+
+-- | Writes to a file descriptor at a given offset.
+--
+-- Returns the number of bytes written. Fewer bytes may be written than requested.
+-- On error, throws an t`IOError` corresponding to the errno.
+pwrite :: Fd -> ByteString -> FileOffset -> IO CSsize
+pwrite (Fd fd) bs off =
+  BU.unsafeUseAsCStringLen bs $ \(buf, size) ->
+    throwErrnoIfMinus1 "pwrite" $ c_pwrite fd buf (fromIntegral size) off
+
+-- | A foreign import of @pread(2)@
+foreign import ccall "pread"
+  c_pread :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
+
+-- | A foreign import of @pwrite(2)@
+foreign import ccall "pwrite"
+  c_pwrite :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
