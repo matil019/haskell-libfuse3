@@ -4,6 +4,7 @@
 
 * Add `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils`
 * Add `ExceptionHandler` and `defaultExceptionHandler`
+* Fix a bug in `resCFuseOperations` to prevent Haskell exceptions from escaping to C land
 
 ## 0.1.1.1 -- 2020-10-06
 
