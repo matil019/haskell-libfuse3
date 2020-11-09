@@ -114,7 +114,6 @@ testBitSet bits mask = bits .&. mask == mask
 -- | Reads from a file descriptor at a given offset.
 pread :: Fd -> ByteCount -> FileOffset -> IO ByteString
 pread (Fd fd) size off =
-  -- TODO benchmark (allocaBytes + packCStringLen) vs (mallocBytes + unsafePackMallocCString)
   allocaBytes (fromIntegral size) $ \buf -> do
     readBytes <- c_pread fd buf size off
     B.packCStringLen (buf, fromIntegral readBytes)

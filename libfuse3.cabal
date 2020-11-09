@@ -81,6 +81,18 @@ test-suite integtest
   default-language:    Haskell2010
   ghc-options:         -Wall -fdefer-typed-holes -threaded
 
+benchmark microbench
+  type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  -- other-modules:
+  build-depends:       libfuse3, base
+                     , bytestring
+                     , criterion
+                     , unix
+  hs-source-dirs:      bench/microbench
+  default-language:    Haskell2010
+  ghc-options:         -Wall -fdefer-typed-holes -threaded
+
 executable null
   if flag(examples)
     buildable: True
