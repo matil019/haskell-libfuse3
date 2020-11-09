@@ -46,8 +46,7 @@ import Data.Aeson ((.=))
 import Data.Bits ((.&.), (.|.), complement)
 import Data.ByteString (ByteString)
 import Data.Void (Void)
-import Foreign (Ptr, allocaBytes)
-import Foreign.C (CInt(CInt), CSize(CSize), Errno, eIO, eNOSYS, eOPNOTSUPP)
+import Foreign.C (Errno, eIO, eNOSYS, eOPNOTSUPP)
 import Numeric (showHex)
 import System.Clock (TimeSpec(TimeSpec))
 import System.Directory (doesPathExist, listDirectory, makeAbsolute)
@@ -57,15 +56,11 @@ import System.LibFuse3
 import System.IO (hPrint, stderr)
 import System.Posix.IO (OpenFileFlags, OpenMode(ReadOnly), closeFd, openFd)
 import System.Posix.Files (regularFileMode, stdFileMode)
-import System.Posix.Types (COff(COff), CSsize(CSsize), ByteCount, Fd(Fd), FileOffset)
+import System.Posix.Types (ByteCount, Fd, FileOffset)
 
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified System.Clock
-
-foreign import ccall "pread"
-  c_pread :: CInt -> Ptr a -> CSize -> COff -> IO CSsize
 
 -- | An outcome of an individual operation in a layer.
 data Outcome a
@@ -107,10 +102,7 @@ passthroughOps srcDir = OpsLayer
       case mode of
         ReadOnly -> tryErrno $ fmap Respond $ openFd (srcDir <> path) mode Nothing flags
         _ -> pure $ Left eOPNOTSUPP
-  , layerRead = \(Fd fd) size offset -> tryErrno $
-      allocaBytes (fromIntegral size) $ \buf -> do
-        readBytes <- c_pread fd buf size offset
-        B.packCStringLen (buf, fromIntegral readBytes)
+  , layerRead = \fd size offset -> tryErrno $ pread fd size offset
   , layerRelease = closeFd
   }
 
