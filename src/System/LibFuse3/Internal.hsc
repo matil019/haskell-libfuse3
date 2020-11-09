@@ -7,7 +7,7 @@
 module System.LibFuse3.Internal where
 
 import Control.Applicative ((<|>))
-import Control.Exception (Exception, SomeException, bracket_, finally, fromException, handle)
+import Control.Exception (Exception, SomeException, bracket_, catch, finally, fromException, handle)
 import Control.Monad (unless, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT)
@@ -463,7 +463,7 @@ resCFuseOperations ops handlerRaw = do
   handler :: ExceptionHandler SomeException
   handler se = case fromException se of
     Nothing -> defaultExceptionHandler se
-    Just e -> handlerRaw e
+    Just e -> handlerRaw e `catch` defaultExceptionHandler
 
   -- convert a Haskell function to C one with @wrapMeth@, get its @FunPtr@, and associate it with freeHaskellFunPtr
   resC :: (cfunc -> IO (FunPtr cfunc)) -> (hsfunc -> cfunc) -> Maybe hsfunc -> ResourceT IO (FunPtr cfunc)
