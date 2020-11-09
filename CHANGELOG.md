@@ -1,6 +1,6 @@
 # Revision history for libfuse3
 
-## 0.1.2.0 -- Unreleased
+## 0.1.2.0 -- 2020-11-09
 
 * Added `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils` (#5)
 * Added `ExceptionHandler` and `defaultExceptionHandler` (#6)
