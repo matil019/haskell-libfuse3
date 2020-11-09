@@ -114,7 +114,7 @@ testBitSet bits mask = bits .&. mask == mask
 -- | Reads from a file descriptor at a given offset.
 --
 -- Fewer bytes may be read than requested.
--- On error, throws an `IOError` corresponding to the errno.
+-- On error, throws an t`IOError` corresponding to the errno.
 pread :: Fd -> ByteCount -> FileOffset -> IO ByteString
 pread (Fd fd) size off =
   allocaBytes (fromIntegral size) $ \buf -> do
@@ -124,7 +124,7 @@ pread (Fd fd) size off =
 -- | Writes to a file descriptor at a given offset.
 --
 -- Returns the number of bytes written. Fewer bytes may be written than requested.
--- On error, throws an `IOError` corresponding to the errno.
+-- On error, throws an t`IOError` corresponding to the errno.
 pwrite :: Fd -> ByteString -> FileOffset -> IO CSsize
 pwrite (Fd fd) bs off =
   BU.unsafeUseAsCStringLen bs $ \(buf, size) ->
