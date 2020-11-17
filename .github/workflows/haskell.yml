@@ -68,12 +68,7 @@ jobs:
         cabal v2-haddock
 
     - name: Check version bounds
-      run: |
-        cabal v2-build --allow-newer # generate dist-newstyle/cache/plan.json which cabal-bounds depends on
-        cabal v2-install --overwrite-policy=always cabal-bounds
-        ~/.cabal/bin/cabal-bounds format -o a.cabal
-        ~/.cabal/bin/cabal-bounds update -o b.cabal --library
-        diff a.cabal b.cabal
+      run: cabal outdated --exit-code
 
     - name: Run tests
       run: |
