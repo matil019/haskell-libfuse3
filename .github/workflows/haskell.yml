@@ -65,6 +65,8 @@ jobs:
             echo ''                       >> cabal.project.local
             echo 'package aeson'          >> cabal.project.local
             echo '  documentation: False' >> cabal.project.local
+            echo 'package vector'         >> cabal.project.local
+            echo '  documentation: False' >> cabal.project.local
             ;;
           *)
             ;;
