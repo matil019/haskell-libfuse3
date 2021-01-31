@@ -17,8 +17,10 @@ jobs:
 
     strategy:
       matrix:
-        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.2']
-        cabal: ['3.2.0.0']
+        ghc: ['8.4.4', '8.6.5', '8.8.4', '8.10.3']
+        cabal: ['3.4.0.0']
+
+      fail-fast: false
 
     steps:
     - name: Install libfuse3
@@ -45,6 +47,9 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Check version bounds
+      run: cabal outdated --exit-code
+
     - name: Build
       run: |
         autoreconf -fiv
@@ -60,15 +65,14 @@ jobs:
             echo ''                       >> cabal.project.local
             echo 'package aeson'          >> cabal.project.local
             echo '  documentation: False' >> cabal.project.local
+            echo 'package vector'         >> cabal.project.local
+            echo '  documentation: False' >> cabal.project.local
             ;;
           *)
             ;;
         esac
         cabal v2-build all
         cabal v2-haddock
-
-    - name: Check version bounds
-      run: cabal outdated --exit-code
 
     - name: Run tests
       run: |
