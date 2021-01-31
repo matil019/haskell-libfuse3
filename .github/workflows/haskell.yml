@@ -47,6 +47,9 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Check version bounds
+      run: cabal outdated --exit-code
+
     - name: Build
       run: |
         autoreconf -fiv
@@ -68,9 +71,6 @@ jobs:
         esac
         cabal v2-build all
         cabal v2-haddock
-
-    - name: Check version bounds
-      run: cabal outdated --exit-code
 
     - name: Run tests
       run: |
