@@ -5,9 +5,6 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  # also run every Sunday in attempt to detect out-of-date version bounds
-  schedule:
-  - cron: "0 0 * * 0"
 
 jobs:
   build:
