@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         ghc: ['8.8.4', '8.10.4', '9.0.1']
-        cabal: ['3.4.0.0']
+        cabal: ['3.6.2.0']
 
       fail-fast: false
 
