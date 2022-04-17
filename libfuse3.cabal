@@ -46,6 +46,7 @@ library
                      , clock ==0.8.*
                      , resourcet ==1.2.*
                      , time >=1.6 && <1.14
+                     -- TODO when upgrading `unix`, check whether System.LibFuse3.FileStat can be replaced with System.Posix.Files.FileStatus
                      , unix ==2.7.*
   pkgconfig-depends:   fuse3
   hs-source-dirs:      src
