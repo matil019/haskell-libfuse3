@@ -14,7 +14,7 @@ jobs:
 
     strategy:
       matrix:
-        ghc: ['8.8.4', '8.10.7', '9.0.1']
+        ghc: ['8.8.4', '8.10.7', '9.0.2']
         cabal: ['3.6.2.0']
 
       fail-fast: false
@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        ghc: ['9.0.1']
+        ghc: ['9.0.2']
         stack: ['2.7.5']
       fail-fast: false
 

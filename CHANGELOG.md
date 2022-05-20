@@ -1,5 +1,9 @@
 # Revision history for libfuse3
 
+## 0.1.2.1 -- 2022-05-20
+
+* Enabled build for Haskell Stack ([#16](https://github.com/matil019/haskell-libfuse3/pull/16), thanks to @modotte)
+
 ## 0.1.2.0 -- 2020-11-09
 
 * Added `throwErrnoOf`, `tryErrno'` and `tryErrno_'` to `System.Libfuse3.Utils` (#5)
