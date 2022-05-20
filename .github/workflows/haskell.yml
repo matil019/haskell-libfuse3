@@ -92,10 +92,6 @@ jobs:
         path: ~/.stack
         key: ${{ runner.os }}-${{ matrix.ghc }}-stack
 
-    - name: Initialize stack project from cabal files
-      run: |
-        stack init
-
     - name: Install dependencies
       run: |
         stack build --system-ghc --no-run-tests --no-run-benchmarks --only-dependencies
