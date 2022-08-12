@@ -23,6 +23,8 @@ import System.Posix.Types
 
 import qualified Foreign
 
+-- TODO mention changes in unix-2.8.0.0? how about FileSystemStats?
+
 -- | A file status a.k.a. metadata.
 --
 -- The differences from `System.Posix.Files.FileStatus` are:

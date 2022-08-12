@@ -495,6 +495,7 @@ resCFuseOperations ops handlerRaw = do
   peekOpenFileFlagsAndMode :: Ptr C.FuseFileInfo -> IO (OpenFileFlags, OpenMode)
   peekOpenFileFlagsAndMode pFuseFileInfo = do
     (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
+    -- TODO initialize missing fields added at unix-2.8.0.0; this means CPPs are needed
     let openFileFlags = OpenFileFlags
           { append   = testBitSet flags (#const O_APPEND)
           , nonBlock = testBitSet flags (#const O_NONBLOCK)
