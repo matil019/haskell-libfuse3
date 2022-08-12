@@ -27,7 +27,9 @@ daemonizeResourceT res = do
         throwIO e
       stateCleanupChecked Nothing istate
     -- cleanup actions are discarded because the child will run them
-    exitImmediately ExitSuccess
+    _ <- exitImmediately ExitSuccess
+    -- this @undefined@ is required because in unix<2.8 @exitImmediately@ returns @IO ()@
+    -- instead of @IO a@
     undefined
 
 -- | `callocBytes` with `free` associated as a cleanup action.
