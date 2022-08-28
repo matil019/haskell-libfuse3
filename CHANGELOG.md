@@ -1,6 +1,12 @@
 # Revision history for libfuse3
 
-## 0.1.3.0 -- YYYY-MM-DD
+## 0.2.0.0 -- YYYY-MM-DD
+
+### Breaking changes
+
+* Fixed the type of `FileStat.blockCount` from `CBlkSize` to `CBlkCnt`.
+
+### Other changes
 
 * Added support for `base-4.17.0.0` (ghc-9.4).
 * Added support for `unix-2.8.0.0`.
