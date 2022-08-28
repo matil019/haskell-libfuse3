@@ -499,9 +499,7 @@ resCFuseOperations ops handlerRaw = do
           { System.Posix.IO.append   = testBitSet flags (#const O_APPEND)
           , System.Posix.IO.nonBlock = testBitSet flags (#const O_NONBLOCK)
           , System.Posix.IO.trunc    = testBitSet flags (#const O_TRUNC)
-          -- TODO make sure that the other fields can be left False/Nothing (documented in FUSE?)
           }
-        -- TODO is this redundant in unix-2.8.0.0? if so, document it
         openMode
           | testBitSet flags (#const O_RDWR)   = ReadWrite
           | testBitSet flags (#const O_WRONLY) = WriteOnly
