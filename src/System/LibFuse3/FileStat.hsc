@@ -31,6 +31,8 @@ import qualified Foreign
 --
 --   - Has an extra field `blockCount`.
 --
+--       - An equivalent accessor @fileBlocks@ was added in unix-2.8.0.0, but it is a @Maybe@.
+--
 --   - Provides an exact representation (`TimeSpec`) of the time fields without converting to `Date.Time.Clock.POSIX.POSIXTime`.
 --
 --       - This assumes that the @struct stat@ has @st_atim@, @st_mtim@ and @st_ctim@ fields.
@@ -60,6 +62,7 @@ data FileStat = FileStat
     fileSize :: FileOffset
   , -- | Number of 512B blocks allocated. @st_blocks@
     blockCount :: CBlkSize -- see also: https://github.com/haskell/unix/pull/78/files
+                           -- TODO change the type to CBlkCnt (breaking change)
   -- these assumes Linux >= 2.6
   , -- | Time of last access. @st_atim@
     accessTimeHiRes :: TimeSpec

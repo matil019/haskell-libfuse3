@@ -1,5 +1,10 @@
 # Revision history for libfuse3
 
+## 0.1.3.0 -- YYYY-MM-DD
+
+* Added support for `base-4.17.0.0` (ghc-9.4).
+* Added support for `unix-2.8.0.0`.
+
 ## 0.1.2.1 -- 2022-05-20
 
 * Enabled build for Haskell Stack ([#16](https://github.com/matil019/haskell-libfuse3/pull/16), thanks to @modotte)

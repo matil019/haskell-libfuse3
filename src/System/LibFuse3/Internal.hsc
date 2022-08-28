@@ -50,7 +50,7 @@ import System.LibFuse3.Internal.Resource (daemonizeResourceT, resMallocBytes, re
 import System.LibFuse3.Utils (pokeCStringLen0, testBitSet, unErrno)
 import System.Posix.Directory (changeWorkingDirectory)
 import System.Posix.Files (blockSpecialMode, characterSpecialMode, directoryMode, namedPipeMode, regularFileMode, socketMode, symbolicLinkMode)
-import System.Posix.IO (OpenFileFlags(OpenFileFlags), OpenMode(ReadOnly, ReadWrite, WriteOnly))
+import System.Posix.IO (OpenFileFlags, OpenMode(ReadOnly, ReadWrite, WriteOnly), defaultFileFlags)
 import System.Posix.Internals (c_access, peekFilePath, withFilePath)
 import System.Posix.Process (createSession)
 import System.Posix.Types (ByteCount, COff(COff), CSsize, DeviceID, FileMode, FileOffset, GroupID, UserID)
@@ -495,12 +495,10 @@ resCFuseOperations ops handlerRaw = do
   peekOpenFileFlagsAndMode :: Ptr C.FuseFileInfo -> IO (OpenFileFlags, OpenMode)
   peekOpenFileFlagsAndMode pFuseFileInfo = do
     (flags :: CInt) <- (#peek struct fuse_file_info, flags) pFuseFileInfo
-    let openFileFlags = OpenFileFlags
-          { append   = testBitSet flags (#const O_APPEND)
-          , nonBlock = testBitSet flags (#const O_NONBLOCK)
-          , trunc    = testBitSet flags (#const O_TRUNC)
-          , exclusive = False
-          , noctty    = False
+    let openFileFlags = defaultFileFlags
+          { System.Posix.IO.append   = testBitSet flags (#const O_APPEND)
+          , System.Posix.IO.nonBlock = testBitSet flags (#const O_NONBLOCK)
+          , System.Posix.IO.trunc    = testBitSet flags (#const O_TRUNC)
           }
         openMode
           | testBitSet flags (#const O_RDWR)   = ReadWrite
