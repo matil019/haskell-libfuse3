@@ -10,7 +10,7 @@ import System.Clock (TimeSpec)
 import System.Posix.Error (throwErrnoPathIfMinus1Retry_)
 import System.Posix.Internals (c_fstat, lstat, withFilePath)
 import System.Posix.Types
-  ( CBlkSize
+  ( CBlkCnt
   , DeviceID
   , Fd(Fd)
   , FileID
@@ -61,8 +61,7 @@ data FileStat = FileStat
   , -- | Total size, in bytes. @st_size@
     fileSize :: FileOffset
   , -- | Number of 512B blocks allocated. @st_blocks@
-    blockCount :: CBlkSize -- see also: https://github.com/haskell/unix/pull/78/files
-                           -- TODO change the type to CBlkCnt (breaking change)
+    blockCount :: CBlkCnt
   -- these assumes Linux >= 2.6
   , -- | Time of last access. @st_atim@
     accessTimeHiRes :: TimeSpec
