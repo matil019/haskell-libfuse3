@@ -23,8 +23,6 @@ import System.Posix.Types
 
 import qualified Foreign
 
--- TODO mention changes in unix-2.8.0.0? how about FileSystemStats?
-
 -- | A file status a.k.a. metadata.
 --
 -- The differences from `System.Posix.Files.FileStatus` are:
@@ -32,6 +30,8 @@ import qualified Foreign
 --   - Is a record type with a `Storable` instance.
 --
 --   - Has an extra field `blockCount`.
+--
+--       - An equivalent accessor @fileBlocks@ was added in unix-2.8.0.0, but it is a @Maybe@.
 --
 --   - Provides an exact representation (`TimeSpec`) of the time fields without converting to `Date.Time.Clock.POSIX.POSIXTime`.
 --
@@ -62,6 +62,7 @@ data FileStat = FileStat
     fileSize :: FileOffset
   , -- | Number of 512B blocks allocated. @st_blocks@
     blockCount :: CBlkSize -- see also: https://github.com/haskell/unix/pull/78/files
+                           -- TODO change the type to CBlkCnt (breaking change)
   -- these assumes Linux >= 2.6
   , -- | Time of last access. @st_atim@
     accessTimeHiRes :: TimeSpec
