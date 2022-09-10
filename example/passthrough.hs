@@ -23,13 +23,13 @@ import Foreign (Ptr, with)
 import Foreign.C (CInt(CInt), CSize(CSize), CUInt(CUInt), Errno(Errno), eIO, eOK, eOPNOTSUPP)
 import System.IO (SeekMode, hPrint, stderr)
 import System.LibFuse3
-import System.Linux.XAttr (lCreateXAttr, lGetXAttr, lListXAttr, lRemoveXAttr, lReplaceXAttr, lSetXAttr)
 import System.Posix.Directory (closeDirStream, createDirectory, openDirStream, readDirStream, removeDirectory)
 import System.Posix.Files (createDevice, createLink, createNamedPipe, createSymbolicLink, readSymbolicLink, removeLink, rename, setFdSize, setFileCreationMask, setFileMode, setFileSize, setSymbolicLinkOwnerAndGroup, setSymbolicLinkTimesHiRes)
 import System.Posix.IO (OpenFileFlags, OpenMode(WriteOnly), closeFd, defaultFileFlags, exclusive, fdSeek, openFd)
 import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(Fd), FileMode, FileOffset, GroupID, UserID)
 
 import qualified System.LibFuse3.FuseConfig as FuseConfig
+import qualified XAttr
 
 foreign import ccall "posix_fallocate"
   c_posix_fallocate :: CInt -> COff -> COff -> IO CInt
@@ -143,21 +143,16 @@ xmpFallocate (Fd fd) _ offset len =
   Errno <$> c_posix_fallocate fd offset len
 
 xmpSetxattr :: FilePath -> String -> ByteString -> SetxattrFlag -> IO Errno
-xmpSetxattr path name value flag = tryErrno_ $ go path name value
-  where
-  go = case flag of
-    SetxattrDefault -> lSetXAttr
-    SetxattrCreate  -> lCreateXAttr
-    SetxattrReplace -> lReplaceXAttr
+xmpSetxattr path name value flag = tryErrno_ $ XAttr.set path name value flag
 
 xmpGetxattr :: FilePath -> String -> IO (Either Errno ByteString)
-xmpGetxattr path name = tryErrno $ lGetXAttr path name
+xmpGetxattr path name = tryErrno $ XAttr.get path name
 
 xmpListxattr :: FilePath -> IO (Either Errno [String])
-xmpListxattr path = tryErrno $ lListXAttr path
+xmpListxattr path = tryErrno $ XAttr.list path
 
 xmpRemovexattr :: FilePath -> String -> IO Errno
-xmpRemovexattr path name = tryErrno_ $ lRemoveXAttr path name
+xmpRemovexattr path name = tryErrno_ $ XAttr.remove path name
 
 xmpCopyFileRange :: Fd -> FileOffset -> Fd -> FileOffset -> ByteCount -> CUInt -> IO (Either Errno CSsize)
 xmpCopyFileRange (Fd fdIn) offIn (Fd fdOut) offOut len flags =

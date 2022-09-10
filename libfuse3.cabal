@@ -115,7 +115,6 @@ executable passthrough
     build-depends:       libfuse3, base
                        , bytestring
                        , clock
-                       , linux-xattr ==0.1.*
                        , time
                        , unix
   else
