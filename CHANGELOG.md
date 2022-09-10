@@ -1,6 +1,6 @@
 # Revision history for libfuse3
 
-## 0.2.0.0 -- YYYY-MM-DD
+## 0.2.0.0 -- 2022-09-10
 
 ### Breaking changes
 
@@ -10,6 +10,7 @@
 
 * Added support for `base-4.17.0.0` (ghc-9.4).
 * Added support for `unix-2.8.0.0`.
+* Removed a dependency to `linux-xattr` from the example `passthrough`, replacing with a hand-written implementation (#21).
 
 ## 0.1.2.1 -- 2022-05-20
 
