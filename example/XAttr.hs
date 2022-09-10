@@ -52,7 +52,9 @@ list path =
         fail "The size of the attribute value changed between llistxattr calls"
       bs <- BU.unsafePackCStringLen (castPtr cvalue, fromIntegral len2)
       -- use peekCStringLen to make sure we use the same encoding as withCString
-      traverse (\b -> BU.unsafeUseAsCStringLen b peekCStringLen) $ B.split 0 bs
+      traverse (\b -> BU.unsafeUseAsCStringLen b peekCStringLen) $ B.split 0
+        -- remove the last byte, which is NUL, to avoid returning an extra empty String
+        $ B.init bs
 
 remove :: FilePath -> String -> IO ()
 remove path name =
