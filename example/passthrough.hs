@@ -30,15 +30,17 @@ import System.Posix.IO (OpenFileFlags, OpenMode(WriteOnly), closeFd, defaultFile
 import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(Fd), FileMode, FileOffset, GroupID, UserID)
 
 import qualified System.LibFuse3.FuseConfig as FuseConfig
-import qualified System.Posix.IO
 import qualified XAttr
+
+#if MIN_VERSION_unix(2,8,0)
+import System.Posix.IO (creat)
+#endif
 
 openFdCompat :: FilePath -> OpenMode -> Maybe FileMode -> OpenFileFlags -> IO Fd
 #if MIN_VERSION_unix(2,8,0)
-openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{System.Posix.IO.creat = mfileMode})
+openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{creat = mfileMode})
 #else
--- Uses the qualified import to avoid triggering a warning (I don't want to make imports conditional)
-openFdCompat = System.Posix.IO.openFd
+openFdCompat = openFd
 #endif
 
 foreign import ccall "posix_fallocate"

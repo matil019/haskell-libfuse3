@@ -62,14 +62,16 @@ import System.Posix.Types (ByteCount, Fd, FileMode, FileOffset)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BL
 import qualified System.Clock
-import qualified System.Posix.IO
+
+#if MIN_VERSION_unix(2,8,0)
+import System.Posix.IO (creat)
+#endif
 
 openFdCompat :: FilePath -> OpenMode -> Maybe FileMode -> OpenFileFlags -> IO Fd
 #if MIN_VERSION_unix(2,8,0)
-openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{System.Posix.IO.creat = mfileMode})
+openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{creat = mfileMode})
 #else
--- Uses the qualified import to avoid triggering a warning (I don't want to make imports conditional)
-openFdCompat = System.Posix.IO.openFd
+openFdCompat = openFd
 #endif
 
 -- | An outcome of an individual operation in a layer.
