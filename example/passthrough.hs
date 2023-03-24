@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Copyright : (The original C)   2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 --                                2011       Sebastian Pipping <sebastian@pipping.org>
@@ -29,7 +30,16 @@ import System.Posix.IO (OpenFileFlags, OpenMode(WriteOnly), closeFd, defaultFile
 import System.Posix.Types (ByteCount, COff(COff), CSsize(CSsize), DeviceID, Fd(Fd), FileMode, FileOffset, GroupID, UserID)
 
 import qualified System.LibFuse3.FuseConfig as FuseConfig
+import qualified System.Posix.IO
 import qualified XAttr
+
+openFdCompat :: FilePath -> OpenMode -> Maybe FileMode -> OpenFileFlags -> IO Fd
+#if MIN_VERSION_unix(2,8,0)
+openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{System.Posix.IO.creat = mfileMode})
+#else
+-- Uses the qualified import to avoid triggering a warning (I don't want to make imports conditional)
+openFdCompat = System.Posix.IO.openFd
+#endif
 
 foreign import ccall "posix_fallocate"
   c_posix_fallocate :: CInt -> COff -> COff -> IO CInt
@@ -73,7 +83,7 @@ xmpReaddir path = tryErrno
 
 xmpMknod :: FilePath -> FileMode -> DeviceID -> IO Errno
 xmpMknod path mode rdev = tryErrno_ $ case fileModeToEntryType mode of
-  RegularFile -> bracket (openFd path WriteOnly (Just mode) (defaultFileFlags{exclusive=True})) closeFd (\_ -> pure ())
+  RegularFile -> bracket (openFdCompat path WriteOnly (Just mode) (defaultFileFlags{exclusive=True})) closeFd (\_ -> pure ())
   Directory -> createDirectory path mode
   NamedPipe -> createNamedPipe path mode
   _ -> createDevice path mode rdev
@@ -111,10 +121,10 @@ xmpUtimens :: FilePath -> POSIXTime -> POSIXTime -> IO Errno
 xmpUtimens path atime mtime = tryErrno_ $ setSymbolicLinkTimesHiRes path atime mtime
 
 xmpCreate :: FilePath -> OpenMode -> FileMode -> OpenFileFlags -> IO (Either Errno Fd)
-xmpCreate path omode fmode flags = tryErrno $ openFd path omode (Just fmode) flags
+xmpCreate path omode fmode flags = tryErrno $ openFdCompat path omode (Just fmode) flags
 
 xmpOpen :: FilePath -> OpenMode -> OpenFileFlags -> IO (Either Errno Fd)
-xmpOpen path mode flags = tryErrno $ openFd path mode Nothing flags
+xmpOpen path mode flags = tryErrno $ openFdCompat path mode Nothing flags
 
 xmpRead :: Fd -> ByteCount -> FileOffset -> IO (Either Errno ByteString)
 xmpRead fd size offset = tryErrno $ pread fd size offset

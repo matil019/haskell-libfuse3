@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -56,11 +57,20 @@ import System.LibFuse3
 import System.IO (hPrint, stderr)
 import System.Posix.IO (OpenFileFlags, OpenMode(ReadOnly), closeFd, openFd)
 import System.Posix.Files (regularFileMode, stdFileMode)
-import System.Posix.Types (ByteCount, Fd, FileOffset)
+import System.Posix.Types (ByteCount, Fd, FileMode, FileOffset)
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as BL
 import qualified System.Clock
+import qualified System.Posix.IO
+
+openFdCompat :: FilePath -> OpenMode -> Maybe FileMode -> OpenFileFlags -> IO Fd
+#if MIN_VERSION_unix(2,8,0)
+openFdCompat path openMode mfileMode openFileFlags = openFd path openMode (openFileFlags{System.Posix.IO.creat = mfileMode})
+#else
+-- Uses the qualified import to avoid triggering a warning (I don't want to make imports conditional)
+openFdCompat = System.Posix.IO.openFd
+#endif
 
 -- | An outcome of an individual operation in a layer.
 data Outcome a
@@ -100,7 +110,7 @@ passthroughOps srcDir = OpsLayer
       pure $ map (\entry -> (entry, Nothing)) entries
   , layerOpen = \path mode flags ->
       case mode of
-        ReadOnly -> tryErrno $ fmap Respond $ openFd (srcDir <> path) mode Nothing flags
+        ReadOnly -> tryErrno $ fmap Respond $ openFdCompat (srcDir <> path) mode Nothing flags
         _ -> pure $ Left eOPNOTSUPP
   , layerRead = \fd size offset -> tryErrno $ pread fd size offset
   , layerRelease = closeFd
