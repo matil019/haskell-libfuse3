@@ -44,9 +44,6 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Check version bounds
-      run: cabal outdated --exit-code
-
     - name: Build
       run: |
         autoreconf -fiv
