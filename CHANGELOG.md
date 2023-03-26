@@ -3,6 +3,7 @@
 ## 0.2.0.1 -- 2023-03-24
 
 * Fixed the example to compile with `unix-2.8`.
+* Added support for `base-4.18` (ghc-9.6).
 
 ## 0.2.0.0 -- 2022-09-10
 
