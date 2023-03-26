@@ -26,7 +26,7 @@ jobs:
         sudo apt-get install -y libfuse3-dev fuse3
 
     - uses: actions/checkout@v2
-    - uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
@@ -77,10 +77,11 @@ jobs:
         sudo apt-get install -y libfuse3-dev fuse3
 
     - uses: actions/checkout@v2
-    - uses: haskell/actions/setup@v1
+    - uses: haskell/actions/setup@v2
       name: Setup Stack
       with:
         ghc-version: ${{ matrix.ghc }}
+        enable-stack: true
         stack-version: ${{ matrix.stack }}
 
     - uses: actions/cache@v1
