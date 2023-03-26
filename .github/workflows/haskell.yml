@@ -14,8 +14,20 @@ jobs:
 
     strategy:
       matrix:
-        ghc: ['8.8.4', '8.10.7', '9.0.2', '9.2.4', '9.4.2']
-        cabal: ['3.6.2.0']
+        ghc: ['8.10.7', '9.0.2', '9.2.5', '9.4.4', '9.6.1']
+        include:
+        # We stick to cabal-3.6.2.0, which is marked as "recommended" in ghcup,
+        # unless ghc is too new.
+        - ghc: '8.10.7'
+          cabal: '3.6.2.0'
+        - ghc: '9.0.2'
+          cabal: '3.6.2.0'
+        - ghc: '9.2.5'
+          cabal: '3.6.2.0'
+        - ghc: '9.4.4'
+          cabal: '3.10.1.0'
+        - ghc: '9.6.1'
+          cabal: '3.10.1.0'
 
       fail-fast: false
 
