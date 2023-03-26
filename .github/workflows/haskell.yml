@@ -10,7 +10,7 @@ jobs:
   cabal:
 
     # libfuse3 requires ubuntu>=20.04
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -25,39 +25,55 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libfuse3-dev fuse3
 
-    - uses: actions/checkout@v2
-    - uses: haskell/actions/setup@v1
+    - uses: actions/checkout@v3
+
+    - uses: haskell/actions/setup@v2
+      id: setup
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
 
-    - name: Cache
-      uses: actions/cache@v1
-      env:
-        cache-name: cache-cabal
-      with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-${{ matrix.ghc }}-
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+    - name: Configure the build
+      run: |
+        cabal v2-configure --flags=examples --enable-tests --enable-documentation
+        cabal v2-build --dry-run
+        # The last step generates dist-newstyle/cache/plan.json for the cache key.
 
-    - name: Check version bounds
-      run: cabal outdated --exit-code
+    - name: Restore cached dependencies
+      uses: actions/cache/restore@v3
+      id: cache
+      with:
+        path: ${{ steps.setup.outputs.cabal-store }}
+        key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-cabal-${{ matrix.cabal }}-plan-${{ hashFiles('**/plan.json') }}
+        restore-keys: |
+          ${{ runner.os }}-ghc-${{ matrix.ghc }}-cabal-${{ matrix.cabal }}-
+
+    - name: Install dependencies
+      run: cabal v2-build all --only-dependencies
+
+    # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
+    - name: Save cached dependencies
+      uses: actions/cache/save@v3
+      # Caches are immutable, trying to save with the same key would error.
+      if: ${{ !steps.cache.outputs.cache-hit
+        || steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+      with:
+        path: ${{ steps.setup.outputs.cabal-store }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
 
     - name: Build
       run: |
         autoreconf -fiv
-        cabal v2-update
-        # Compile the sdist archive instead of the source tree to make sure the all required files are packaged in it
+        # Compile the sdist archive instead of the source tree to make sure the all required files
+        # (in particular, `./configure`) are packaged in it.
+        # This means we have to run `cabal v2-configure` with the exact same arguments again
         cabal v2-sdist
         tar -xf dist-newstyle/sdist/libfuse3-*.tar.gz
         cd libfuse3-*/
         cabal v2-configure --flags=examples --enable-tests --enable-documentation
         cabal v2-build all
         cabal v2-haddock
+        cabal check
 
     - name: Run tests
       run: |
@@ -65,7 +81,7 @@ jobs:
         cabal v2-run -- integtest
 
   stack:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         ghc: ['9.0.2']
@@ -79,11 +95,13 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libfuse3-dev fuse3
 
-    - uses: actions/checkout@v2
-    - uses: haskell/actions/setup@v1
+    - uses: actions/checkout@v3
+
+    - uses: haskell/actions/setup@v2
       name: Setup Stack
       with:
         ghc-version: ${{ matrix.ghc }}
+        enable-stack: true
         stack-version: ${{ matrix.stack }}
 
     - uses: actions/cache@v1
