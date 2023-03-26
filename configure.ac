@@ -1,4 +1,4 @@
-AC_INIT([Haskell libfuse3 package], [0.2.0.0])
+AC_INIT([Haskell libfuse3 package], [0.2.0.1])
 
 # Safety check: Ensure that we are in the correct source directory.
 AC_CONFIG_SRCDIR([libfuse3.cabal])
