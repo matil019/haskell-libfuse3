@@ -33,9 +33,6 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: ${{ matrix.cabal }}
 
-    - name: Check cabal file
-      run: cabal check
-
     - name: Configure the build
       run: |
         cabal v2-configure --flags=examples --enable-tests --enable-documentation
@@ -76,6 +73,7 @@ jobs:
         cabal v2-configure --flags=examples --enable-tests --enable-documentation
         cabal v2-build all
         cabal v2-haddock
+        cabal check
 
     - name: Run tests
       run: |
