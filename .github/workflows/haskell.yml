@@ -10,7 +10,7 @@ jobs:
   cabal:
 
     # libfuse3 requires ubuntu>=20.04
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -62,7 +62,7 @@ jobs:
         cabal v2-run -- integtest
 
   stack:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         ghc: ['9.0.2']
