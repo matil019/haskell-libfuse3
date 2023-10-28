@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import Control.Exception (bracket, onException)
@@ -5,7 +6,7 @@ import Criterion.Main (bench, bgroup, defaultMain, nfIO)
 import Data.ByteString (ByteString)
 import Foreign (allocaBytes, free, mallocBytes)
 import System.LibFuse3.Utils
-import System.Posix.IO (OpenMode(ReadOnly), closeFd, defaultFileFlags, openFd)
+import System.Posix.IO (OpenFileFlags, OpenMode(ReadOnly), closeFd, defaultFileFlags, openFd)
 import System.Posix.Types (ByteCount, Fd(Fd), FileOffset)
 
 import qualified Data.ByteString as B
@@ -25,9 +26,16 @@ preadMalloc (Fd fd) size off = do
         BU.unsafePackMallocCStringLen (buf, fromIntegral readBytes)
   mkBS `onException` free buf
 
+openFdNoFileMode :: FilePath -> OpenMode -> OpenFileFlags -> IO Fd
+#if MIN_VERSION_unix(2,8,0)
+openFdNoFileMode = openFd
+#else
+openFdNoFileMode a b c = openFd a b Nothing c
+#endif
+
 main :: IO ()
 main = bracket
-  (openFd "/dev/zero" ReadOnly Nothing defaultFileFlags)
+  (openFdNoFileMode "/dev/zero" ReadOnly defaultFileFlags)
   closeFd
   $ \fd -> defaultMain
     [ bgroup "pread"
