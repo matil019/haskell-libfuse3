@@ -137,7 +137,7 @@ executable statjson
                        , bytestring
                        , clock
                        , directory
-                       , filepath
+                       , filepath >=1.4.1
                        , unix
   else
     buildable: False
