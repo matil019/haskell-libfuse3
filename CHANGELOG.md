@@ -2,6 +2,8 @@
 
 <!-- Memo: Stop supporting older GHCs when bumping a version -->
 
+## 0.2.2.0 --
+
 ## 0.2.1.0 -- 2025-05-22
 
 * Fixed the benchmark to work with `unix-2.8.*`.
