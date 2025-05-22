@@ -351,7 +351,7 @@ foreign import ccall safe "fuse_lowlevel_version"
 foreign import ccall safe "fuse_mount"
   fuse_mount :: Ptr StructFuse -> CString -> IO CInt
 
-foreign import ccall safe "fuse_new"
+foreign import ccall safe "hs_libfuse3_fuse_new"
   fuse_new :: Ptr FuseArgs -> Ptr FuseOperations -> CSize -> Ptr a -> IO (Ptr StructFuse)
 
 foreign import ccall safe "fuse_opt_free_args"

@@ -1,5 +1,11 @@
 # Revision history for libfuse3
 
+<!-- Memo: Stop supporting older GHCs when bumping a version -->
+
+## 0.2.1.0 --
+
+* Added a C wrapper function around `fuse_new`, which is new a function macro instead of an ordinary function since an unknown version of the upstream.
+
 ## 0.2.0.1 -- 2023-03-26
 
 * Fixed the example to compile with `unix-2.8`.
