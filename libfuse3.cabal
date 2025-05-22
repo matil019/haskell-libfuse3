@@ -42,7 +42,7 @@ library
                        System.LibFuse3.Utils
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.14.3 && <4.19
+  build-depends:       base >=4.14.3 && <4.22
                      , bytestring >=0.10.8 && <0.13
                      , clock ==0.8.*
                      , resourcet >=1.2 && <1.4

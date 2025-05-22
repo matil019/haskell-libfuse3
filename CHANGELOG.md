@@ -4,6 +4,7 @@
 
 ## 0.2.1.0 --
 
+* Raised upper bound: `base <4.22`, allowing ghc-9.8, 9.10 and 9.12.
 * Added a C wrapper function around `fuse_new`, which is new a function macro instead of an ordinary function since an unknown version of the upstream.
 
 ## 0.2.0.1 -- 2023-03-26
