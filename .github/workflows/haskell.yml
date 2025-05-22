@@ -14,7 +14,10 @@ jobs:
 
     strategy:
       matrix:
-        ghc: ['8.10.7', '9.0.2', '9.2.5', '9.4.4', '9.6.1']
+        ghc: [ '8.10.7', '9.0.2', '9.2.8', '9.4.8', '9.6.7'
+             # Omit GitHub Actions for GHC versions which are newer than "recommended" by GHCup.
+             # , '9.8.4', '9.10.2', '9.12.2'
+             ]
         include:
         # We use cabal-3.12.1.0, which is marked as "recommended" by GHCup.
         - ghc: '8.10.7'
