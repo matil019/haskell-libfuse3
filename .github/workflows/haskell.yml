@@ -14,22 +14,12 @@ jobs:
 
     strategy:
       matrix:
-        ghc: ['8.10.7', '9.0.2', '9.2.5', '9.4.4', '9.6.1']
-        include:
-        # We stick to cabal-3.6.2.0, which is marked as "recommended" in ghcup,
-        # unless ghc is too new.
-        - ghc: '8.10.7'
-          cabal: '3.6.2.0'
-        - ghc: '9.0.2'
-          cabal: '3.6.2.0'
-        - ghc: '9.2.5'
-          cabal: '3.6.2.0'
-        - ghc: '9.4.4'
-          cabal: '3.10.1.0'
-        - ghc: '9.6.1'
-          cabal: '3.10.1.0'
-
-      fail-fast: false
+        ghc: [ '8.10.7', '9.0.2', '9.2.8', '9.4.8', '9.6.7'
+             # Omit GitHub Actions for GHC versions which are newer than "recommended" by GHCup.
+             # , '9.8.4', '9.10.2', '9.12.2'
+             ]
+        # We use cabal-3.12.1.0, which is marked as "recommended" by GHCup.
+        cabal: ['3.12.1.0']
 
     steps:
     - name: Install libfuse3
@@ -37,9 +27,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libfuse3-dev fuse3
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2
       id: setup
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -47,28 +37,30 @@ jobs:
 
     - name: Configure the build
       run: |
-        cabal v2-configure --flags=examples --enable-tests --enable-documentation
+        cabal v2-configure --flags=examples --enable-tests --disable-documentation
         cabal v2-build --dry-run
-        # The last step generates dist-newstyle/cache/plan.json for the cache key.
+      # The last step generates dist-newstyle/cache/plan.json for the cache key.
 
     - name: Restore cached dependencies
-      uses: actions/cache/restore@v3
+      uses: actions/cache/restore@v4
       id: cache
+      env:
+        key: ${{ runner.os }}-ghc-${{ steps.setup.outputs.ghc-version }}-cabal-${{ steps.setup.outputs.cabal-version }}
       with:
         path: ${{ steps.setup.outputs.cabal-store }}
-        key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-cabal-${{ matrix.cabal }}-plan-${{ hashFiles('**/plan.json') }}
-        restore-keys: |
-          ${{ runner.os }}-ghc-${{ matrix.ghc }}-cabal-${{ matrix.cabal }}-
+        key: ${{ env.key }}-plan-${{ hashFiles('**/plan.json') }}
+        restore-keys: ${{ env.key }}-
 
     - name: Install dependencies
-      run: cabal v2-build all --only-dependencies
+      # If we had an exact cache hit, the dependencies will be up to date.
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: cabal build all --only-dependencies
 
     # Cache dependencies already here, so that we do not have to rebuild them should the subsequent steps fail.
     - name: Save cached dependencies
-      uses: actions/cache/save@v3
-      # Caches are immutable, trying to save with the same key would error.
-      if: ${{ !steps.cache.outputs.cache-hit
-        || steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+      uses: actions/cache/save@v4
+      # If we had an exact cache hit, trying to save the cache would error because of key clash.
+      if: steps.cache.outputs.cache-hit != 'true'
       with:
         path: ${{ steps.setup.outputs.cabal-store }}
         key: ${{ steps.cache.outputs.cache-primary-key }}
@@ -79,57 +71,20 @@ jobs:
         # Compile the sdist archive instead of the source tree to make sure the all required files
         # (in particular, `./configure`) are packaged in it.
         # This means we have to run `cabal v2-configure` with the exact same arguments again
+        # as we did in the "Configure the build" step
         cabal v2-sdist
         tar -xf dist-newstyle/sdist/libfuse3-*.tar.gz
         cd libfuse3-*/
-        cabal v2-configure --flags=examples --enable-tests --enable-documentation
+        cabal v2-configure --flags=examples --enable-tests --disable-documentation
         cabal v2-build all
-        cabal v2-haddock
+        # We also build documentation and check cabal file against the sdist archive instead of the
+        # source tree.
+        cabal v2-haddock all --disable-documentation
+        # --disable-documentation disables building documentation for dependencies.
+        # The package's own documentation is still built,
+        # yet contains no links to the documentation of the dependencies.
         cabal check
 
     - name: Run tests
       run: |
-        cabal v2-run -- unittest
-        cabal v2-run -- integtest
-
-  stack:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        ghc: ['9.0.2']
-        stack: ['2.7.5']
-      fail-fast: false
-
-    steps:
-
-    - name: Install libfuse3
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libfuse3-dev fuse3
-
-    - uses: actions/checkout@v3
-
-    - uses: haskell/actions/setup@v2
-      name: Setup Stack
-      with:
-        ghc-version: ${{ matrix.ghc }}
-        enable-stack: true
-        stack-version: ${{ matrix.stack }}
-
-    - uses: actions/cache@v1
-      name: Cache ~/.stack
-      with:
-        path: ~/.stack
-        key: ${{ runner.os }}-${{ matrix.ghc }}-stack
-
-    - name: Install dependencies
-      run: |
-        stack build --system-ghc --no-run-tests --no-run-benchmarks --only-dependencies
-
-    - name: Build
-      run: |
-        stack build --system-ghc --no-run-tests --no-run-benchmarks
-
-    - name: Run tests
-      run: |
-        stack test --system-ghc
+        cabal v2-test all

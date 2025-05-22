@@ -1,5 +1,13 @@
 # Revision history for libfuse3
 
+<!-- Memo: Stop supporting older GHCs when bumping a version -->
+
+## 0.2.1.0 --
+
+* Fixed the benchmark to work with `unix-2.8.*`.
+* Added a C wrapper function around `fuse_new`, which is now a function macro instead of an ordinary function since an unknown version of the upstream.
+* Raised upper bound: `base <4.22`, allowing ghc-9.8, 9.10 and 9.12.
+
 ## 0.2.0.1 -- 2023-03-26
 
 * Fixed the example to compile with `unix-2.8`.
