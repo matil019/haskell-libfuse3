@@ -3,7 +3,7 @@ cabal-version:       >=1.10
 -- For further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                libfuse3
-version:             0.2.0.1
+version:             0.2.1.0
 synopsis:            A Haskell binding for libfuse-3.x
 description:         Bindings for libfuse, the FUSE userspace reference implementation, of version 3.x. Compatible with Linux.
 -- bug-reports:
